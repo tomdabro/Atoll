@@ -24,7 +24,7 @@ struct AudioVisualizerView: View {
     
     var body: some View {
         if enableRealTimeWaveform {
-            RealTimeAudioSpectrumView(isPlaying: $isPlaying)
+            RealTimeAudioVisualizerView(isPlaying: $isPlaying)
         } else {
             AudioSpectrumView(isPlaying: $isPlaying)
         }

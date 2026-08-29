@@ -3035,6 +3035,7 @@ struct Media: View {
     @Default(.lyricsPanelWidth) private var lyricsPanelWidth
     @Default(.lyricsPanelOffset) private var lyricsPanelOffset
     @Default(.visualizerBarCount) private var visualizerBarCount
+    @Default(.visualizerStyle) private var visualizerStyle
     @Default(.enableWaveformScrubber) private var enableWaveformScrubber
     @Default(.colorExtractionMode) private var colorExtractionMode
     @Default(.parallaxEffectIntensity) private var parallaxEffectIntensity
@@ -3342,7 +3343,24 @@ struct Media: View {
                     }
                 }
                 .settingsHighlight(id: highlightID("Enable real-time waveform"))
-                
+
+                if Defaults[.enableRealTimeWaveform] {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Waveform style")
+                        HStack(spacing: 10) {
+                            ForEach(VisualizerStyle.allCases) { style in
+                                VisualizerStyleOption(
+                                    style: style,
+                                    isSelected: visualizerStyle == style,
+                                    action: { visualizerStyle = style }
+                                )
+                            }
+                        }
+                    }
+                    .padding(.vertical, 4)
+                    .settingsHighlight(id: highlightID("Waveform style"))
+                }
+
                 Picker("Visualizer candles", selection: $visualizerBarCount) {
                     Text("4").tag(4)
                     Text("5").tag(5)
@@ -3474,6 +3492,73 @@ struct Media: View {
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// One selectable card in the "Waveform style" picker: a small animated demo
+/// of that style (a synthetic sine-driven magnitude sequence, not real audio
+/// -- previews need to work whether or not anything is currently playing)
+/// plus its name, matching cliamp's live-preview visualizer picker.
+private struct VisualizerStyleOption: View {
+    let style: VisualizerStyle
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                VisualizerStyleDemo(style: style)
+                    .frame(width: 44, height: 22)
+                Text(style.displayName)
+                    .font(.caption2)
+                    .foregroundStyle(isSelected ? Color.primary : .secondary)
+            }
+            .padding(8)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(isSelected ? Color.accentColor.opacity(0.15) : Color.gray.opacity(0.08))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 1.5)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// Animates a synthetic 6-band magnitude sequence through the given style's
+/// shape so the picker shows movement without needing real playback.
+private struct VisualizerStyleDemo: View {
+    let style: VisualizerStyle
+
+    var body: some View {
+        TimelineView(.animation) { timeline in
+            content(at: timeline.date.timeIntervalSinceReferenceDate)
+        }
+    }
+
+    @ViewBuilder
+    private func content(at time: TimeInterval) -> some View {
+        let magnitudes = demoMagnitudes(at: time)
+        switch style {
+        case .bars:
+            BarsVisualizerShape(magnitudes: magnitudes).fill(Color.accentColor)
+        case .wave:
+            WaveformShape(magnitudes: magnitudes, minHeight: 1).fill(Color.accentColor)
+        case .dots:
+            DotsVisualizerShape(magnitudes: magnitudes).fill(Color.accentColor)
+        case .mirror:
+            MirrorVisualizerShape(magnitudes: magnitudes).fill(Color.accentColor)
+        }
+    }
+
+    private func demoMagnitudes(at time: TimeInterval) -> [Float] {
+        (0..<6).map { index in
+            let phase = Double(index) * 0.6
+            let wave = (sin(time * 2.4 + phase) + 1) / 2 // 0...1
+            return Float(0.2 + wave * 0.7)
+        }
     }
 }
 

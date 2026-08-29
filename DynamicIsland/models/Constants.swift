@@ -43,6 +43,20 @@ struct CustomVisualizer: Codable, Hashable, Equatable, Defaults.Serializable {
     var speed: CGFloat = 1.0
 }
 
+/// A selectable real-time render style for the audio-reactive waveform
+/// (`enableRealTimeWaveform`), analogous to cliamp's `v`-key visualizer
+/// cycle. Every style renders from the same `AudioTap` magnitude bands --
+/// only the shape differs.
+enum VisualizerStyle: String, CaseIterable, Identifiable, Codable, Defaults.Serializable {
+    case bars = "Bars"
+    case wave = "Wave"
+    case dots = "Dots"
+    case mirror = "Mirror"
+
+    var id: String { rawValue }
+    var displayName: String { rawValue }
+}
+
 struct CustomAppIcon: Codable, Hashable, Equatable, Defaults.Serializable, Identifiable {
     let id: UUID
     var name: String
@@ -1035,6 +1049,7 @@ extension Defaults.Keys {
         // MARK: Media playback
     static let coloredSpectrogram = Key<Bool>("coloredSpectrogram", default: true)
     static let enableRealTimeWaveform = Key<Bool>("enableRealTimeWaveform", default: false)
+    static let visualizerStyle = Key<VisualizerStyle>("visualizerStyle", default: .bars)
     static let enableSneakPeek = Key<Bool>("enableSneakPeek", default: false)
     static let sneakPeekStyles = Key<SneakPeekStyle>("sneakPeekStyles", default: .standard)
     static let showSneakPeekOnTrackChange = Key<Bool>("showSneakPeekOnTrackChange", default: true)
