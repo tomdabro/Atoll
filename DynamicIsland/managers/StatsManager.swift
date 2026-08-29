@@ -529,10 +529,13 @@ class StatsManager: ObservableObject {
         
         if shouldMonitorForStats {
             // Start monitoring after 3.5 seconds (when notch is open and stats tab is active)
-            delayedStartTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { [weak self] _ in
+            delayedStartTimer = Timer(timeInterval: 0.5, repeats: false) { [weak self] _ in
                 DispatchQueue.main.async {
                     self?.startMonitoring()
                 }
+            }
+            if let delayedStartTimer {
+                RunLoop.main.add(delayedStartTimer, forMode: .common)
             }
         } else {
             if notchIsOpen && currentView != "stats" {
@@ -618,13 +621,15 @@ class StatsManager: ObservableObject {
             Defaults[.statsUpdateInterval] = interval
         }
 
-        monitoringTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
             guard let self = self else { return }
 
             Task { @MainActor in
                 self.updateSystemStats()
             }
         }
+        RunLoop.main.add(timer, forMode: .common)
+        monitoringTimer = timer
     }
 
     private func handleUpdateIntervalChange(_ newValue: Double) {
@@ -654,11 +659,13 @@ class StatsManager: ObservableObject {
 
         delayedStopTimer?.invalidate()
 
-        delayedStopTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
+        let timer = Timer(timeInterval: delay, repeats: false) { [weak self] _ in
             DispatchQueue.main.async {
                 self?.stopMonitoring()
             }
         }
+        RunLoop.main.add(timer, forMode: .common)
+        delayedStopTimer = timer
     }
     
     // MARK: - Private Methods
