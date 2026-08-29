@@ -74,9 +74,23 @@ class ThirdPartyMediaSourceController: MediaControllerProtocol {
             album: now.album,
             currentTime: max(0, elapsed),
             duration: now.duration ?? 0,
+            isShuffled: now.isShuffled ?? false,
+            repeatMode: Self.repeatMode(from: now.repeatMode),
             lastUpdated: now.timestamp,
             artwork: now.artworkData
         )
+    }
+
+    /// Maps the wire protocol's "off"/"one"/"all" string to `RepeatMode`,
+    /// falling back to `.off` for nil (source doesn't report repeat state)
+    /// or an unrecognized value, rather than propagating either as a crash
+    /// or an arbitrary case.
+    private static func repeatMode(from wireValue: String?) -> RepeatMode {
+        switch wireValue {
+        case "one": return .one
+        case "all": return .all
+        default: return .off
+        }
     }
 
     private var selectedSourceID: String? { manager.selectedSource?.sourceID }
@@ -111,10 +125,15 @@ class ThirdPartyMediaSourceController: MediaControllerProtocol {
         manager.sendCommand(.previousTrack, to: sourceID)
     }
 
-    /// Not part of `ExtensionMediaCommand`; third-party sources don't expose
-    /// shuffle/repeat toggling yet.
-    func toggleShuffle() async {}
-    func toggleRepeat() async {}
+    func toggleShuffle() async {
+        guard let sourceID = selectedSourceID else { return }
+        manager.sendCommand(.toggleShuffle, to: sourceID)
+    }
+
+    func toggleRepeat() async {
+        guard let sourceID = selectedSourceID else { return }
+        manager.sendCommand(.toggleRepeat, to: sourceID)
+    }
 
     func isActive() -> Bool {
         manager.selectedSource != nil

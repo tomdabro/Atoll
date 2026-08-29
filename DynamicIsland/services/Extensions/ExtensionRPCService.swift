@@ -679,6 +679,8 @@ final class ExtensionRPCService {
             isPlaying: params?["isPlaying"]?.boolValue ?? false,
             elapsedTime: params?["elapsedTime"]?.doubleValue ?? 0,
             duration: params?["duration"]?.doubleValue,
+            isShuffled: params?["isShuffled"]?.boolValue,
+            repeatMode: params?["repeatMode"]?.stringValue,
             timestamp: Date()
         )
         mediaSourceManager.updateNowPlaying(state)

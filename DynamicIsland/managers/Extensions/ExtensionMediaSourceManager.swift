@@ -42,6 +42,14 @@ struct ExtensionMediaSourceNowPlaying: Equatable {
     let isPlaying: Bool
     let elapsedTime: TimeInterval
     let duration: TimeInterval?
+    /// nil = the source doesn't track shuffle/repeat state (e.g. a player
+    /// without either feature), so its control buttons fall back to off
+    /// rather than falsely rendering an active state that will snap back on
+    /// the next update.
+    let isShuffled: Bool?
+    /// "off" / "one" / "all" mirroring PlaybackState.RepeatMode's raw ordering;
+    /// nil carries the same "unknown" meaning as `isShuffled`.
+    let repeatMode: String?
     let timestamp: Date
 }
 
@@ -54,6 +62,8 @@ enum ExtensionMediaCommand {
     case nextTrack
     case previousTrack
     case seek(to: TimeInterval)
+    case toggleShuffle
+    case toggleRepeat
 
     var rpcCommandName: String {
         switch self {
@@ -63,6 +73,8 @@ enum ExtensionMediaCommand {
         case .nextTrack: return "nextTrack"
         case .previousTrack: return "previousTrack"
         case .seek: return "seek"
+        case .toggleShuffle: return "toggleShuffle"
+        case .toggleRepeat: return "toggleRepeat"
         }
     }
 }
