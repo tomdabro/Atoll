@@ -37,10 +37,19 @@ class ThirdPartyMediaSourceController: MediaControllerProtocol {
     private let manager: ExtensionMediaSourceManager
     private var cancellable: AnyCancellable?
 
-    /// Fails when no third-party media source is currently registered, same
-    /// as every other controller returning `nil` when its app isn't running.
-    init?(manager: ExtensionMediaSourceManager = .shared) {
-        guard manager.selectedSource != nil else { return nil }
+    /// Non-failable, unlike this file's original design: a third-party
+    /// source frequently doesn't exist yet at construction time (Atoll just
+    /// launched/restarted and the broker hasn't finished reconnecting +
+    /// re-registering) but *will* moments later, and this instance needs to
+    /// still be alive and subscribed when that happens. Returning `nil` here
+    /// meant `MusicManager` fell back to a different controller entirely and
+    /// never retried -- the third-party source could register successfully
+    /// on the RPC side while nothing ever displayed it, until the user
+    /// manually reselected it in the picker (recreating this controller,
+    /// this time with a source already present). `isActive()`/`isWorking`
+    /// already report the "no source" state correctly, matching every other
+    /// controller here that isn't wrapped in a failable `init?`.
+    init(manager: ExtensionMediaSourceManager = .shared) {
         self.manager = manager
         self.playbackState = Self.makePlaybackState(manager: manager)
 
