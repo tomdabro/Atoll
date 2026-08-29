@@ -117,10 +117,12 @@ struct MirrorVisualizerShape: Shape {
     }
 }
 
-/// A continuous dotted line tracing a rolling history of overall level --
-/// unlike the other styles (a snapshot of the current magnitude bands),
-/// this plots one aggregate sample per tick over time, closest to cliamp's
-/// own scrolling `Wave` visualizer.
+/// A continuous dotted line tracing a rolling history of overall level,
+/// centered on the view's vertical middle and swinging up for louder
+/// moments, down for quieter ones -- unlike the other styles (a snapshot
+/// of the current magnitude bands, anchored to the bottom), this plots
+/// one aggregate sample per tick over time around a center axis, closest
+/// to cliamp's own scrolling, center-anchored `Wave` visualizer.
 struct LineHistoryVisualizerShape: Shape {
     var history: [Float]
 
@@ -138,9 +140,10 @@ struct LineHistoryVisualizerShape: Shape {
         let stepX = rect.width / CGFloat(count - 1)
 
         for (index, value) in history.enumerated() {
-            let scale = max(0.08, min(1.0, CGFloat(value) * 1.5 + 0.08))
+            let normalized = max(0.0, min(1.0, CGFloat(value) * 1.5))
+            let offset = (normalized - 0.5) * rect.height
             let x = rect.minX + CGFloat(index) * stepX
-            let y = rect.maxY - scale * rect.height
+            let y = rect.midY - offset
             let dotRect = CGRect(x: x - dotSize / 2, y: y - dotSize / 2, width: dotSize, height: dotSize)
             path.addRoundedRect(in: dotRect, cornerSize: CGSize(width: dotSize / 2, height: dotSize / 2))
         }
