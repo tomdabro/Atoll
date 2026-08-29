@@ -126,7 +126,10 @@ class CalendarManager: ObservableObject {
 
     @MainActor
     func reloadCalendarAndReminderLists() async {
-        let allCalendars = await calendarService.calendars()
+        var allCalendars = await calendarService.calendars()
+        if GoogleCalendarManager.shared.isAuthenticated {
+            allCalendars.append(contentsOf: await GoogleCalendarManager.shared.fetchCalendars())
+        }
         eventCalendars = allCalendars.filter { !$0.isReminder }
         reminderLists = allCalendars.filter { $0.isReminder }
         self.allCalendars = allCalendars
@@ -135,7 +138,7 @@ class CalendarManager: ObservableObject {
 
     @MainActor
     private func maybeRefreshEventsAfterReload() async {
-        guard hasCalendarAccess else { return }
+        guard hasCalendarAccess || GoogleCalendarManager.shared.isAuthenticated else { return }
         let now = Date()
         if let lastFetch = lastEventsFetchDate, now.timeIntervalSince(lastFetch) < reloadRefreshInterval {
             return
@@ -318,7 +321,9 @@ class CalendarManager: ObservableObject {
         let service = calendarService
 
         let fetched = await eventFetchLimiter.run {
-            await service.events(from: startDate, to: endDate, calendars: calendarIDs)
+            async let ekEvents = service.events(from: startDate, to: endDate, calendars: calendarIDs)
+            async let googleEvents = GoogleCalendarManager.shared.fetchEvents(from: startDate, to: endDate, calendarIDs: calendarIDs)
+            return (await ekEvents + (await googleEvents)).sorted { $0.start < $1.start }
         }
 
         if lockScreenEvents == fetched {
@@ -351,7 +356,7 @@ class CalendarManager: ObservableObject {
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 60 * 1_000_000_000)
                 if Task.isCancelled { break }
-                guard self.hasCalendarAccess else { continue }
+                guard self.hasCalendarAccess || GoogleCalendarManager.shared.isAuthenticated else { continue }
                 await self.updateLockScreenEvents(force: false)
             }
         }
@@ -371,11 +376,13 @@ class CalendarManager: ObservableObject {
         let service = calendarService
 
         let events = await eventFetchLimiter.run {
-            await service.events(
+            async let ekEvents = service.events(
                 from: startDate,
                 to: endDate,
                 calendars: calendarIDs
             )
+            async let googleEvents = GoogleCalendarManager.shared.fetchEvents(from: startDate, to: endDate, calendarIDs: calendarIDs)
+            return (await ekEvents + (await googleEvents)).sorted { $0.start < $1.start }
         }
 
         self.events = events

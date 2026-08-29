@@ -1218,6 +1218,10 @@ extension Defaults.Keys {
     static let calendarSelectionState = Key<CalendarSelectionState>("calendarSelectionState", default: .all)
         static let showFullEventTitles = Key<Bool>("showFullEventTitles", default: false)
         static let autoScrollToNextEvent = Key<Bool>("autoScrollToNextEvent", default: true)
+        static let googleCalendarClientID = Key<String>("googleCalendarClientID", default: "")
+        // The OAuth token pair and client secret live in the Keychain (see
+        // KeychainGoogleCalendarTokenStore); this key holds only the expiry.
+        static let googleCalendarTokenExpiration = Key<Double>("googleCalendarTokenExpiration", default: 0)
     
         // MARK: Fullscreen Media Detection
     static let alwaysHideInFullscreen = Key<Bool>("alwaysHideInFullscreen", default: false)

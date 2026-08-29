@@ -3635,6 +3635,8 @@ struct CalendarSettings: View {
 
     var body: some View {
         Form {
+            GoogleCalendarSettingsSection()
+
             if !calendarManager.hasCalendarAccess || !calendarManager.hasReminderAccess {
                 Text("Calendar or Reminder access is denied. Please enable it in System Settings.")
                     .foregroundColor(.red)
