@@ -23,6 +23,7 @@
 import AppKit
 import AudioToolbox
 import CoreAudio
+import Darwin
 import Defaults
 import simd
 import os.log
@@ -179,6 +180,16 @@ private func getPID(for audioProcessObject: AudioObjectID) -> pid_t? {
     return pid
 }
 
+/// Bare CLI executables (e.g. cliamp) have no bundle identifier at all —
+/// `getBundleIdentifier` returns an empty string for them, not nil. Their
+/// only usable identity is the executable name libproc reports.
+private func getProcessName(forPID pid: pid_t) -> String? {
+    var nameBuffer = [CChar](repeating: 0, count: Int(MAXPATHLEN))
+    let length = proc_name(pid, &nameBuffer, UInt32(nameBuffer.count))
+    guard length > 0 else { return nil }
+    return String(cString: nameBuffer)
+}
+
 enum AudioTapTargetMatcher {
     /// CoreAudio exposes helper processes separately from their parent app. A
     /// player such as TIDAL therefore appears as `com.tidal.desktop.player`
@@ -229,6 +240,14 @@ class AudioTap: NSObject {
         "com.audirvana.Audirvana-Studio",
         "com.vox.vox",
         "com.coppertino.Vox",
+    ]
+
+    // Bare CLI players run outside any app bundle, so CoreAudio reports an
+    // empty bundle ID for them — matched by executable name instead (see
+    // `getProcessName`). cliamp (github.com/tomdabro/cliamp) is a terminal
+    // music player with no bundle ID of its own.
+    private let targetProcessNames = [
+        "cliamp",
     ]
 
     private override init() {
@@ -283,26 +302,35 @@ class AudioTap: NSObject {
         // nested helpers; TIDAL, for example, emits audio from
         // `com.tidal.desktop.player`, while its main app PID has no audio object.
         for processObject in getAudioProcessObjectIDs() {
-            guard let processBundleIdentifier = getBundleIdentifier(for: processObject),
-                  let targetBundleIdentifier = AudioTapTargetMatcher.targetBundleIdentifier(
+            if let processBundleIdentifier = getBundleIdentifier(for: processObject), !processBundleIdentifier.isEmpty,
+               let targetBundleIdentifier = AudioTapTargetMatcher.targetBundleIdentifier(
                     for: processBundleIdentifier,
                     among: targetBundleIDs
-                  ) else {
+               ) {
+                if shouldSkipSpotifyTap(
+                    bundleIdentifier: targetBundleIdentifier,
+                    bluetoothOutputActive: bluetoothOutputActive
+                ) {
+                    print("⏭️ [AudioTap] Bluetooth output active — skipping Spotify tap to preserve AirPods media control")
+                    continue
+                }
+
+                targetProcessObjects.insert(processObject)
+                bundleIdentifierByProcessObject[processObject] = processBundleIdentifier
+                let pidDescription = getPID(for: processObject).map(String.init) ?? "unknown"
+                print("🎯 [AudioTap] Found audio process \(processBundleIdentifier) with PID: \(pidDescription), AudioObjectID: \(processObject)")
                 continue
             }
 
-            if shouldSkipSpotifyTap(
-                bundleIdentifier: targetBundleIdentifier,
-                bluetoothOutputActive: bluetoothOutputActive
-            ) {
-                print("⏭️ [AudioTap] Bluetooth output active — skipping Spotify tap to preserve AirPods media control")
-                continue
+            // Bare CLI players (no bundle at all — CoreAudio reports an empty
+            // bundle ID) are only identifiable by executable name.
+            if let pid = getPID(for: processObject),
+               let processName = getProcessName(forPID: pid),
+               targetProcessNames.contains(processName) {
+                targetProcessObjects.insert(processObject)
+                bundleIdentifierByProcessObject[processObject] = processName
+                print("🎯 [AudioTap] Found bare-process audio source \(processName) with PID: \(pid), AudioObjectID: \(processObject)")
             }
-
-            targetProcessObjects.insert(processObject)
-            bundleIdentifierByProcessObject[processObject] = processBundleIdentifier
-            let pidDescription = getPID(for: processObject).map(String.init) ?? "unknown"
-            print("🎯 [AudioTap] Found audio process \(processBundleIdentifier) with PID: \(pidDescription), AudioObjectID: \(processObject)")
         }
 
         // Preserve the previous PID translation as a fallback for applications
@@ -520,6 +548,26 @@ class AudioTap: NSObject {
     
     var isCapturing: Bool {
         captureIsRunning
+    }
+
+    /// Snapshot of PIDs among `targetProcessNames` currently producing audio.
+    /// Bare CLI players (cliamp) don't launch/terminate through LaunchServices,
+    /// so `NSWorkspace`'s app launch/terminate notifications never fire for
+    /// them — the caller (`DynamicIslandApp`'s music observers) polls this and
+    /// calls `restartCapture()` on any change instead. Read-only; safe to call
+    /// whether or not capture is currently running.
+    func currentBareProcessTargetPIDs() -> Set<pid_t> {
+        var pids = Set<pid_t>()
+        for processObject in getAudioProcessObjectIDs() {
+            if let bundleIdentifier = getBundleIdentifier(for: processObject), !bundleIdentifier.isEmpty {
+                continue
+            }
+            guard let pid = getPID(for: processObject),
+                  let processName = getProcessName(forPID: pid),
+                  targetProcessNames.contains(processName) else { continue }
+            pids.insert(pid)
+        }
+        return pids
     }
 
     deinit {

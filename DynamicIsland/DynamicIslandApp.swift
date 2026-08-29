@@ -133,6 +133,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     // Block-based AudioTap observers, kept with their center so they can be removed by token
     private var audioTapObserverTokens: [(center: NotificationCenter, token: NSObjectProtocol)] = []
+    // Bare CLI players (cliamp) never fire NSWorkspace launch/terminate
+    // notifications, so their presence is polled instead of observed.
+    private var audioTapBareProcessPollTimer: Timer?
+    private var audioTapLastBareProcessPIDs: Set<pid_t> = []
 //    let calendarManager = CalendarManager.shared
 //    let webcamManager = WebcamManager.shared
 //    var closeNotchWorkItem: DispatchWorkItem?
@@ -267,6 +271,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             (NSWorkspace.shared.notificationCenter, terminateToken),
             (NotificationCenter.default, routeToken),
         ]
+
+        // Bare CLI players (cliamp) never register with LaunchServices, so
+        // the launch/terminate observers above never see them start or stop.
+        // Poll for a change in the target PID set instead; 5s keeps the cost
+        // negligible while still reacting well within a listening session.
+        audioTapLastBareProcessPIDs = AudioTap.shared.currentBareProcessTargetPIDs()
+        let pollTimer = Timer(timeInterval: 5.0, repeats: true) { [weak self] _ in
+            guard let self, Defaults[.enableRealTimeWaveform] else { return }
+            let current = AudioTap.shared.currentBareProcessTargetPIDs()
+            guard current != self.audioTapLastBareProcessPIDs else { return }
+            self.audioTapLastBareProcessPIDs = current
+            print("🎵 [AudioTap] Bare-process audio source set changed, restarting capture...")
+            AudioTap.shared.restartCapture()
+        }
+        RunLoop.main.add(pollTimer, forMode: .common)
+        audioTapBareProcessPollTimer = pollTimer
     }
 
     /// Removes the AudioTap observers registered by `setupAudioTapMusicObservers()`.
@@ -275,6 +295,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             center.removeObserver(token)
         }
         audioTapObserverTokens.removeAll()
+        audioTapBareProcessPollTimer?.invalidate()
+        audioTapBareProcessPollTimer = nil
+        audioTapLastBareProcessPIDs.removeAll()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
