@@ -33,6 +33,7 @@ final class ExtensionRPCService {
     private let widgetManager = ExtensionLockScreenWidgetManager.shared
     private let notchManager = ExtensionNotchExperienceManager.shared
     private let authorizationManager = ExtensionAuthorizationManager.shared
+    private let mediaSourceManager = ExtensionMediaSourceManager.shared
 
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
@@ -114,6 +115,16 @@ final class ExtensionRPCService {
 
         case "atoll.subscribeShelfEvents":
             result = handleSubscribeShelfEvents(params: request.params, id: request.id)
+
+        // MARK: Media Source
+        case "atoll.registerMediaSource":
+            result = handleRegisterMediaSource(params: request.params, id: request.id)
+
+        case "atoll.unregisterMediaSource":
+            result = handleUnregisterMediaSource(params: request.params, id: request.id)
+
+        case "atoll.publishNowPlayingState":
+            result = handlePublishNowPlayingState(params: request.params, id: request.id)
 
         default:
             result = RPCErrorResponse(
@@ -606,6 +617,72 @@ final class ExtensionRPCService {
         server?.registerShelfSubscription(for: bundleIdentifier)
         logDiagnostics("RPC: subscribeShelfEvents registered for \(bundleIdentifier)")
         return RPCSuccessResponse(result: ["subscribed": .bool(true)], id: id)
+    }
+
+    // MARK: - Media Source
+
+    private func handleRegisterMediaSource(params: RPCParams?, id: String) -> Codable {
+        guard let sourceID = params?["sourceID"]?.stringValue, !sourceID.isEmpty else {
+            return errorResponse(code: RPCErrorCode.invalidParams, message: "Missing sourceID", id: id)
+        }
+        guard let name = params?["name"]?.stringValue, !name.isEmpty else {
+            return errorResponse(code: RPCErrorCode.invalidParams, message: "Missing name", id: id)
+        }
+        guard authorizationManager.canProcessMediaSourceRequest(from: bundleIdentifier) else {
+            return errorResponse(code: RPCErrorCode.unauthorized, message: "Media source scope not granted", id: id)
+        }
+
+        let descriptor = ExtensionMediaSourceDescriptor(
+            sourceID: sourceID,
+            bundleIdentifier: bundleIdentifier,
+            name: name,
+            supportsSeek: params?["supportsSeek"]?.boolValue ?? true,
+            supportsSkip: params?["supportsSkip"]?.boolValue ?? true
+        )
+        mediaSourceManager.register(descriptor)
+        authorizationManager.recordActivity(for: bundleIdentifier, scope: .mediaSource)
+        logDiagnostics("RPC: Registered media source \(sourceID) (\(name)) from \(bundleIdentifier)")
+        return RPCSuccessResponse(result: ["success": .bool(true)], id: id)
+    }
+
+    private func handleUnregisterMediaSource(params: RPCParams?, id: String) -> Codable {
+        guard let sourceID = params?["sourceID"]?.stringValue, !sourceID.isEmpty else {
+            return errorResponse(code: RPCErrorCode.invalidParams, message: "Missing sourceID", id: id)
+        }
+        mediaSourceManager.unregister(sourceID: sourceID, bundleIdentifier: bundleIdentifier)
+        logDiagnostics("RPC: Unregistered media source \(sourceID) from \(bundleIdentifier)")
+        return RPCSuccessResponse(result: ["success": .bool(true)], id: id)
+    }
+
+    private func handlePublishNowPlayingState(params: RPCParams?, id: String) -> Codable {
+        guard let sourceID = params?["sourceID"]?.stringValue, !sourceID.isEmpty else {
+            return errorResponse(code: RPCErrorCode.invalidParams, message: "Missing sourceID", id: id)
+        }
+        guard mediaSourceManager.owner(of: sourceID) == bundleIdentifier else {
+            return errorResponse(code: RPCErrorCode.unauthorized, message: "sourceID not owned by this connection", id: id)
+        }
+        guard let title = params?["title"]?.stringValue, !title.isEmpty else {
+            return errorResponse(code: RPCErrorCode.invalidParams, message: "Missing title", id: id)
+        }
+
+        var artworkData: Data?
+        if let base64 = params?["artworkBase64"]?.stringValue {
+            artworkData = Data(base64Encoded: base64)
+        }
+
+        let state = ExtensionMediaSourceNowPlaying(
+            sourceID: sourceID,
+            title: title,
+            artist: params?["artist"]?.stringValue ?? "",
+            album: params?["album"]?.stringValue ?? "",
+            artworkData: artworkData,
+            isPlaying: params?["isPlaying"]?.boolValue ?? false,
+            elapsedTime: params?["elapsedTime"]?.doubleValue ?? 0,
+            duration: params?["duration"]?.doubleValue,
+            timestamp: Date()
+        )
+        mediaSourceManager.updateNowPlaying(state)
+        return RPCSuccessResponse(result: ["success": .bool(true)], id: id)
     }
 
     // MARK: - Client JSON Transformation

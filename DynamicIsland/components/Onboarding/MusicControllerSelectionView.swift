@@ -149,6 +149,8 @@ extension MediaControllerType {
             return String(localized: "Uses macOS Now Playing when the TIDAL app is the active media source. Playback controls follow the system Now Playing target. Scrubbing, shuffle, or repeat may not work if TIDAL does not support the corresponding remote command.")
         case .cider:
             return String(localized: "Uses macOS Now Playing when Cider is the active media source. Playback controls follow the system Now Playing target.")
+        case .thirdParty:
+            return String(localized: "Uses a media source registered by a connected third-party extension (via AtollPluginManager).")
         }
     }
 }

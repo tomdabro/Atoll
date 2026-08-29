@@ -223,6 +223,17 @@ final class ExtensionRPCServer {
         )
     }
 
+    func notifyMediaCommand(bundleIdentifier: String, sourceID: String, command: ExtensionMediaCommand) {
+        var params: [String: RPCValue] = [
+            "sourceID": .string(sourceID),
+            "command": .string(command.rpcCommandName)
+        ]
+        if case .seek(let position) = command {
+            params["seekTo"] = .double(position)
+        }
+        sendNotification(to: bundleIdentifier, method: "atoll.mediaCommand", params: params)
+    }
+
     // MARK: - Shelf Event Subscriptions
 
     func registerShelfSubscription(for bundleIdentifier: String) {
@@ -335,6 +346,9 @@ final class ExtensionRPCServer {
     private func handleConnectionState(connID: UUID, state: NWConnection.State) {
         switch state {
         case .failed, .cancelled:
+            if let bundleIdentifier = connections[connID]?.bundleIdentifier {
+                ExtensionMediaSourceManager.shared.unregisterAll(forBundleIdentifier: bundleIdentifier)
+            }
             connections.removeValue(forKey: connID)
             logDiagnostics("RPC client disconnected (id: \(connID.uuidString.prefix(8)))")
         default:

@@ -145,6 +145,7 @@ enum ExtensionPermissionScope: String, CaseIterable, Codable, Defaults.Serializa
     case lockScreenWidgets
     case notchExperiences
     case fileSharing
+    case mediaSource
 
     var displayName: String {
         switch self {
@@ -152,6 +153,7 @@ enum ExtensionPermissionScope: String, CaseIterable, Codable, Defaults.Serializa
         case .lockScreenWidgets: return "Lock Screen Widgets"
         case .notchExperiences: return "Notch Experiences"
         case .fileSharing: return "File Sharing"
+        case .mediaSource: return "Media Source"
         }
     }
 }
@@ -440,6 +442,7 @@ enum MediaControllerType: String, CaseIterable, Identifiable, Defaults.Serializa
     case amazonMusic = "Amazon Music"
     case tidal = "TIDAL"
     case cider = "Cider"
+    case thirdParty = "Third-Party Extension"
     
     var id: String { self.rawValue }
     
@@ -452,6 +455,11 @@ enum MediaControllerType: String, CaseIterable, Identifiable, Defaults.Serializa
         case .amazonMusic: return String(localized: "Amazon Music")
         case .tidal: return String(localized: "TIDAL")
         case .cider: return String(localized: "Cider")
+        case .thirdParty:
+            if let name = ExtensionMediaSourceManager.shared.selectedSource?.name {
+                return name
+            }
+            return String(localized: "Third-Party Extension")
         }
     }
 }
@@ -1191,6 +1199,7 @@ extension Defaults.Keys {
     
     // MARK: Media Controller
     static let mediaController = Key<MediaControllerType>("mediaController", default: defaultMediaController)
+    static let selectedThirdPartyMediaSourceID = Key<String?>("selectedThirdPartyMediaSourceID", default: nil)
     static let spotifySPDCCookie = Key<String>("spotifySPDCCookie", default: "")
     static let spotifyAuthAccessToken = Key<String>("spotifyAuthAccessToken", default: "")
     static let spotifyAuthAccessTokenExpiration = Key<Double>("spotifyAuthAccessTokenExpiration", default: 0)

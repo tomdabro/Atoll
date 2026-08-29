@@ -154,6 +154,16 @@ enum RPCValue: Codable {
         if case .object(let o) = self { return o }
         return nil
     }
+    /// A JSON number without a decimal point decodes to `.int`, not
+    /// `.double` — this normalizes either to a `Double` so callers never
+    /// need to know which one a given field happened to arrive as.
+    var doubleValue: Double? {
+        switch self {
+        case .double(let d): return d
+        case .int(let i): return Double(i)
+        default: return nil
+        }
+    }
 }
 
 // MARK: - Flexible Params

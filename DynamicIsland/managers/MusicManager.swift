@@ -774,6 +774,8 @@ class MusicManager: ObservableObject {
             newController = TidalController()
         case .cider:
             newController = CiderController()
+        case .thirdParty:
+            newController = ThirdPartyMediaSourceController()
         }
 
         // Set up state observation for the new controller
@@ -2050,7 +2052,7 @@ extension MusicManager {
             return spotifyGreen
         case .amazonMusic:
             return amazonOrange
-        case .tidal, .cider:
+        case .tidal, .cider, .thirdParty:
             return .accentColor
         case .nowPlaying:
             if let bundleIdentifier,

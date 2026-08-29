@@ -2977,6 +2977,8 @@ private extension MediaControllerType {
             return [TidalController.bundleIdentifier]
         case .cider:
             return ["sh.cider.genten.mac"]
+        case .thirdParty:
+            return ExtensionMediaSourceManager.shared.selectedSource.map { [$0.bundleIdentifier] } ?? []
         }
     }
 
@@ -2989,6 +2991,7 @@ private extension MediaControllerType {
         case .amazonMusic: return "music.note.list"
         case .tidal: return "waveform.path"
         case .cider: return "cup.and.saucer.fill"
+        case .thirdParty: return "puzzlepiece.extension.fill"
         }
     }
 
@@ -3001,6 +3004,7 @@ private extension MediaControllerType {
         case .amazonMusic: return .cyan
         case .tidal: return .primary
         case .cider: return .orange
+        case .thirdParty: return .accentColor
         }
     }
 }
