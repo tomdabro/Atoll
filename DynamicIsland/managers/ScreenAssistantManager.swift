@@ -413,8 +413,8 @@ class ScreenAssistantManager: NSObject, ObservableObject {
             return
         }
         
-        // Get selected model or default to gemini-2.5-flash
-        let selectedModel = Defaults[.selectedAIModel] ?? AIModel(id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", supportsThinking: true)
+        // Get selected model or default to gemini-3.5-flash
+        let selectedModel = Defaults[.selectedAIModel] ?? AIModel(id: "gemini-3.5-flash", name: "Gemini 3.5 Flash", supportsThinking: true)
         let modelId = selectedModel.id
         
         guard let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/\(modelId):generateContent?key=\(apiKey)") else {
@@ -436,8 +436,8 @@ class ScreenAssistantManager: NSObject, ObservableObject {
             return
         }
         
-        // Get selected model or default to gpt-4o
-        let selectedModel = Defaults[.selectedAIModel] ?? AIModel(id: "gpt-4o", name: "GPT-4o", supportsThinking: false)
+        // Get selected model or default to gpt-5.6-sol
+        let selectedModel = Defaults[.selectedAIModel] ?? AIModel(id: "gpt-5.6-sol", name: "GPT-5.6 Sol", supportsThinking: true)
         let modelId = selectedModel.id
         
         guard let url = URL(string: "https://api.openai.com/v1/chat/completions") else {
@@ -447,7 +447,7 @@ class ScreenAssistantManager: NSObject, ObservableObject {
             return
         }
         
-        performOpenAIRequest(url: url, requestBody: buildOpenAIRequestBody(message: message, files: files, model: modelId), apiKey: apiKey)
+        performOpenAIRequest(url: url, requestBody: buildOpenAIRequestBody(message: message, files: files, model: modelId, provider: .openai), apiKey: apiKey)
     }
 
     private func sendToGroqAPI(message: String, files: [ScreenAssistantFile]) {
@@ -459,14 +459,14 @@ class ScreenAssistantManager: NSObject, ObservableObject {
             return
         }
         
-        // Get selected model or default to llama-3.3-70b-versatile
+        // Get selected model or default to openai/gpt-oss-120b
         let selectedModel = Defaults[.selectedAIModel]
         let modelId: String
         if let selectedId = selectedModel?.id,
            AIModelProvider.groq.supportedModels.contains(where: { $0.id == selectedId }) {
             modelId = selectedId
         } else {
-            modelId = "llama-3.3-70b-versatile"
+            modelId = "openai/gpt-oss-120b"
         }
         
         guard let url = URL(string: "https://api.groq.com/openai/v1/chat/completions") else {
@@ -478,7 +478,7 @@ class ScreenAssistantManager: NSObject, ObservableObject {
         
         performOpenAIRequest(
             url: url,
-            requestBody: buildOpenAIRequestBody(message: message, files: files, model: modelId),
+            requestBody: buildOpenAIRequestBody(message: message, files: files, model: modelId, provider: .groq),
             apiKey: apiKey,
             provider: .groq
         )
@@ -514,7 +514,7 @@ class ScreenAssistantManager: NSObject, ObservableObject {
 
         performOpenAIRequest(
             url: url,
-            requestBody: buildOpenAIRequestBody(message: message, files: files, model: modelId),
+            requestBody: buildOpenAIRequestBody(message: message, files: files, model: modelId, provider: .ollamaCloud),
             apiKey: apiKey,
             provider: .ollamaCloud
         )
@@ -529,8 +529,8 @@ class ScreenAssistantManager: NSObject, ObservableObject {
             return
         }
         
-        // Get selected model or default to claude-3-5-sonnet
-        let selectedModel = Defaults[.selectedAIModel] ?? AIModel(id: "claude-3-5-sonnet-20241022", name: "Claude 3.5 Sonnet", supportsThinking: false)
+        // Get selected model or default to claude-sonnet-5
+        let selectedModel = Defaults[.selectedAIModel] ?? AIModel(id: "claude-sonnet-5", name: "Claude Sonnet 5", supportsThinking: true)
         let modelId = selectedModel.id
         
         guard let url = URL(string: "https://api.anthropic.com/v1/messages") else {
@@ -642,7 +642,17 @@ class ScreenAssistantManager: NSObject, ObservableObject {
         return requestBody
     }
     
-    private func buildOpenAIRequestBody(message: String, files: [ScreenAssistantFile], model: String) -> [String: Any] {
+    /// OpenAI's reasoning-class models (o1/o3/o4/gpt-5+) reject the legacy
+    /// `temperature`/`max_tokens` chat-completions params outright (400) and
+    /// require `max_completion_tokens` instead. Groq/Ollama Cloud serve their
+    /// own OpenAI-compatible gateways and accept the legacy params regardless
+    /// of upstream model name, so this only applies when talking to OpenAI's
+    /// own API.
+    private func isOpenAIReasoningModel(_ model: String) -> Bool {
+        model.hasPrefix("o1") || model.hasPrefix("o3") || model.hasPrefix("o4") || model.hasPrefix("gpt-5")
+    }
+
+    private func buildOpenAIRequestBody(message: String, files: [ScreenAssistantFile], model: String, provider: AIModelProvider = .openai) -> [String: Any] {
         var messages: [[String: Any]] = []
         
         // Add previous conversation messages (last 10 for context)
@@ -664,12 +674,19 @@ class ScreenAssistantManager: NSObject, ObservableObject {
             "content": contextualMessage
         ])
         
-        return [
+        var body: [String: Any] = [
             "model": model,
-            "messages": messages,
-            "temperature": 0.7,
-            "max_tokens": 2048
+            "messages": messages
         ]
+        
+        if provider == .openai && isOpenAIReasoningModel(model) {
+            body["max_completion_tokens"] = 2048
+        } else {
+            body["temperature"] = 0.7
+            body["max_tokens"] = 2048
+        }
+        
+        return body
     }
     
     private func buildClaudeRequestBody(message: String, files: [ScreenAssistantFile], model: String) -> [String: Any] {

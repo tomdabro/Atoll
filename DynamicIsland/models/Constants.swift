@@ -776,33 +776,32 @@ enum AIModelProvider: String, CaseIterable, Identifiable, Defaults.Serializable 
         switch self {
         case .gemini:
             return [
-                // Gemini 2.5 Models (Latest)
+                // Gemini 3 (current generation)
+                AIModel(id: "gemini-3.1-pro-preview", name: "Gemini 3.1 Pro", supportsThinking: true),
+                AIModel(id: "gemini-3.7-flash", name: "Gemini 3.7 Flash", supportsThinking: true),
+                AIModel(id: "gemini-3.6-flash", name: "Gemini 3.6 Flash", supportsThinking: true),
+                AIModel(id: "gemini-3.5-flash", name: "Gemini 3.5 Flash", supportsThinking: true),
+                AIModel(id: "gemini-3.5-flash-lite", name: "Gemini 3.5 Flash-Lite", supportsThinking: false),
+
+                // Gemini 2.5 (still GA, not retired)
                 AIModel(id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", supportsThinking: true),
-                AIModel(id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", supportsThinking: true),
-                AIModel(id: "gemini-2.5-flash-lite", name: "Gemini 2.5 Flash-Lite", supportsThinking: false),
-                AIModel(id: "gemini-2.5-flash-live", name: "Gemini 2.5 Flash Live", supportsThinking: false),
-                AIModel(id: "gemini-2.5-flash-native-audio", name: "Gemini 2.5 Flash Native Audio", supportsThinking: true),
-                
-                // Gemini 2.0 Models
-                AIModel(id: "gemini-2.0-flash", name: "Gemini 2.0 Flash", supportsThinking: false),
-                AIModel(id: "gemini-2.0-flash-lite", name: "Gemini 2.0 Flash-Lite", supportsThinking: false),
-                AIModel(id: "gemini-2.0-flash-live", name: "Gemini 2.0 Flash Live", supportsThinking: false),
-                
-                // Legacy 1.5 Models (for compatibility)
-                AIModel(id: "gemini-1.5-pro", name: "Gemini 1.5 Pro", supportsThinking: false),
-                AIModel(id: "gemini-1.5-flash", name: "Gemini 1.5 Flash", supportsThinking: false)
+                AIModel(id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", supportsThinking: true)
+
+                // 2.0 and 1.5 generations have been shut down by Google and
+                // are deliberately not listed here -- they returned hard API
+                // errors, not degraded results.
             ]
         case .openai:
             return [
-                AIModel(id: "gpt-4o", name: "GPT-4o", supportsThinking: false),
-                AIModel(id: "gpt-4o-mini", name: "GPT-4o Mini", supportsThinking: false),
-                AIModel(id: "o1-preview", name: "o1 Preview", supportsThinking: true),
-                AIModel(id: "o1-mini", name: "o1 Mini", supportsThinking: true)
+                AIModel(id: "gpt-5.6-sol", name: "GPT-5.6 Sol", supportsThinking: true),
+                AIModel(id: "gpt-5.6-terra", name: "GPT-5.6 Terra", supportsThinking: true),
+                AIModel(id: "gpt-5.6-luna", name: "GPT-5.6 Luna", supportsThinking: true)
             ]
         case .claude:
             return [
-                AIModel(id: "claude-3-5-sonnet", name: "Claude 3.5 Sonnet", supportsThinking: false),
-                AIModel(id: "claude-3-haiku", name: "Claude 3 Haiku", supportsThinking: false)
+                AIModel(id: "claude-opus-5", name: "Claude Opus 5", supportsThinking: true),
+                AIModel(id: "claude-sonnet-5", name: "Claude Sonnet 5", supportsThinking: true),
+                AIModel(id: "claude-haiku-4-5-20251001", name: "Claude Haiku 4.5", supportsThinking: true)
             ]
         case .local:
             return [
@@ -811,10 +810,14 @@ enum AIModelProvider: String, CaseIterable, Identifiable, Defaults.Serializable 
             ]
         case .groq:
             return [
-                AIModel(id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B Versatile", supportsThinking: false),
-                AIModel(id: "llama-3.1-8b-instant", name: "Llama 3.1 8B Instant", supportsThinking: false),
-                AIModel(id: "qwen-qwq-32b", name: "Qwen QWQ 32B", supportsThinking: false),
-                AIModel(id: "mixtral-8x7b-32768", name: "Mixtral 8x7B", supportsThinking: false)
+                // llama-3.1-8b-instant and llama-3.3-70b-versatile moved to
+                // Enterprise-only (contact-sales) pricing and no longer take
+                // a standard developer API key -- dropped in favor of what a
+                // regular Groq API key can actually call today.
+                AIModel(id: "openai/gpt-oss-120b", name: "GPT-OSS 120B", supportsThinking: true),
+                AIModel(id: "openai/gpt-oss-20b", name: "GPT-OSS 20B", supportsThinking: true),
+                AIModel(id: "groq/compound", name: "Groq Compound", supportsThinking: false),
+                AIModel(id: "groq/compound-mini", name: "Groq Compound Mini", supportsThinking: false)
             ]
         case .ollamaCloud:
             return [
