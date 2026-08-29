@@ -231,8 +231,21 @@ final class ExtensionAuthorizationManager: ObservableObject {
         }
     }
 
+    // Authorization here is all-or-nothing per app (there's no per-scope
+    // consent UI) — `defaultScopes()` is granted in full to every new
+    // entry. An already-authorized entry's `allowedScopes` was persisted
+    // at grant time, so adding a new `ExtensionPermissionScope` case
+    // leaves every existing entry silently missing it forever unless
+    // healed here. Only widens already-authorized entries; pending/denied/
+    // revoked entries are untouched.
     private func normalizeState() {
-        entries = entries.filter { !$0.bundleIdentifier.isEmpty }
+        entries = entries.map { entry in
+            var entry = entry
+            if entry.status == .authorized {
+                entry.allowedScopes.formUnion(defaultScopes())
+            }
+            return entry
+        }.filter { !$0.bundleIdentifier.isEmpty }
         rateLimitRecords = rateLimitRecords.filter { !$0.bundleIdentifier.isEmpty }
     }
 }
