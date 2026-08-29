@@ -451,6 +451,7 @@ struct ChatInputView: View {
         case .claude: return "doc.text"
         case .local: return "server.rack"
         case .groq: return "bolt.fill"
+        case .ollamaCloud: return "cloud.fill"
         }
     }
     
@@ -475,6 +476,8 @@ struct ChatInputView: View {
             apiKey = "local"
         case .groq:
             apiKey = Defaults[.groqApiKey]
+        case .ollamaCloud:
+            apiKey = Defaults[.ollamaCloudApiKey]
         }
         
         if apiKey.isEmpty {

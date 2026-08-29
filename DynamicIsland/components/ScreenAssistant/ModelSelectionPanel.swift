@@ -128,6 +128,7 @@ struct ModelSelectionView: View {
     @State private var claudeApiKey: String = Defaults[.claudeApiKey]
     @State private var localEndpoint: String = Defaults[.localModelEndpoint]
     @State private var groqApiKey: String = Defaults[.groqApiKey]
+    @State private var ollamaCloudApiKey: String = Defaults[.ollamaCloudApiKey]
     
     @State private var showingApiKeyAlert = false
     
@@ -185,6 +186,13 @@ struct ModelSelectionView: View {
                             provider: .groq,
                             isSelected: selectedProvider == .groq,
                             onSelect: { selectProvider(.groq) },
+                            isWide: true
+                        )
+
+                        ProviderCard(
+                            provider: .ollamaCloud,
+                            isSelected: selectedProvider == .ollamaCloud,
+                            onSelect: { selectProvider(.ollamaCloud) },
                             isWide: true
                         )
                     }
@@ -255,7 +263,8 @@ struct ModelSelectionView: View {
                             openaiApiKey: $openaiApiKey,
                             claudeApiKey: $claudeApiKey,
                             localEndpoint: $localEndpoint,
-                            groqApiKey: $groqApiKey
+                            groqApiKey: $groqApiKey,
+                            ollamaCloudApiKey: $ollamaCloudApiKey
                         )
                     }
                 }
@@ -303,6 +312,8 @@ struct ModelSelectionView: View {
             return !localEndpoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case .groq:
             return !groqApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        case .ollamaCloud:
+            return !ollamaCloudApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
     }
     
@@ -317,6 +328,7 @@ struct ModelSelectionView: View {
         claudeApiKey = Defaults[.claudeApiKey]
         localEndpoint = Defaults[.localModelEndpoint]
         groqApiKey = Defaults[.groqApiKey]
+        ollamaCloudApiKey = Defaults[.ollamaCloudApiKey]
     }
     
     private func saveConfiguration() {
@@ -331,6 +343,7 @@ struct ModelSelectionView: View {
         Defaults[.claudeApiKey] = claudeApiKey
         Defaults[.localModelEndpoint] = localEndpoint
         Defaults[.groqApiKey] = groqApiKey
+        Defaults[.ollamaCloudApiKey] = ollamaCloudApiKey
         
         closePanel()
         
@@ -413,6 +426,7 @@ struct ProviderCard: View {
         case .claude: return "doc.text"
         case .local: return "server.rack"
         case .groq: return "bolt.fill"
+        case .ollamaCloud: return "cloud.fill"
         }
     }
 }
@@ -473,6 +487,7 @@ struct ApiConfigurationSection: View {
     @Binding var claudeApiKey: String
     @Binding var localEndpoint: String
     @Binding var groqApiKey: String
+    @Binding var ollamaCloudApiKey: String
     
     var body: some View {
         VStack(spacing: 12) {
@@ -515,6 +530,13 @@ struct ApiConfigurationSection: View {
                     placeholder: "Enter your Groq API key",
                     value: $groqApiKey,
                     helpText: "Get your API key from Groq Console"
+                )
+            case .ollamaCloud:
+                ApiKeyField(
+                    title: "Ollama Cloud API Key",
+                    placeholder: "Enter your Ollama Cloud API key",
+                    value: $ollamaCloudApiKey,
+                    helpText: "Get your API key from ollama.com/settings/keys"
                 )
             }
         }

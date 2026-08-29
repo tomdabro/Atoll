@@ -399,6 +399,8 @@ class ScreenAssistantManager: NSObject, ObservableObject {
             sendToLocalAPI(message: message, files: files)
         case .groq:
             sendToGroqAPI(message: message, files: files)
+        case .ollamaCloud:
+            sendToOllamaCloudAPI(message: message, files: files)
         }
     }
     
@@ -479,6 +481,42 @@ class ScreenAssistantManager: NSObject, ObservableObject {
             requestBody: buildOpenAIRequestBody(message: message, files: files, model: modelId),
             apiKey: apiKey,
             provider: .groq
+        )
+    }
+
+    private func sendToOllamaCloudAPI(message: String, files: [ScreenAssistantFile]) {
+        let apiKey = Defaults[.ollamaCloudApiKey]
+        guard !apiKey.isEmpty else {
+            print("❌ ScreenAssistant: No Ollama Cloud API key configured")
+            addAssistantMessage("Error: No Ollama Cloud API key configured. Please set your API key in model settings.")
+            isLoading = false
+            return
+        }
+
+        // Get selected model or default to gpt-oss:120b
+        let selectedModel = Defaults[.selectedAIModel]
+        let modelId: String
+        if let selectedId = selectedModel?.id,
+           AIModelProvider.ollamaCloud.supportedModels.contains(where: { $0.id == selectedId }) {
+            modelId = selectedId
+        } else {
+            modelId = "gpt-oss:120b"
+        }
+
+        // Ollama Cloud exposes an OpenAI-compatible endpoint at ollama.com
+        // (same shape Groq uses) -- Bearer auth, /v1/chat/completions.
+        guard let url = URL(string: "https://ollama.com/v1/chat/completions") else {
+            print("❌ ScreenAssistant: Invalid Ollama Cloud API URL")
+            addAssistantMessage("Error: Invalid API URL")
+            isLoading = false
+            return
+        }
+
+        performOpenAIRequest(
+            url: url,
+            requestBody: buildOpenAIRequestBody(message: message, files: files, model: modelId),
+            apiKey: apiKey,
+            provider: .ollamaCloud
         )
     }
     
@@ -826,8 +864,8 @@ class ScreenAssistantManager: NSObject, ObservableObject {
         switch provider {
         case .gemini:
             parseGeminiResponse(data: data)
-        case .openai, .groq:
-            parseOpenAIResponse(data: data)
+        case .openai, .groq, .ollamaCloud:
+            parseOpenAIResponse(data: data, provider: provider)
         case .claude:
             parseClaudeResponse(data: data)
         case .local:
@@ -864,29 +902,29 @@ class ScreenAssistantManager: NSObject, ObservableObject {
         }
     }
     
-    private func parseOpenAIResponse(data: Data) {
+    private func parseOpenAIResponse(data: Data, provider: AIModelProvider = .openai) {
         do {
             if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                print("✅ ScreenAssistant: Successfully parsed OpenAI JSON response")
+                print("✅ ScreenAssistant: Successfully parsed \(provider.displayName) JSON response")
                 
                 if let choices = json["choices"] as? [[String: Any]],
                    let firstChoice = choices.first,
                    let message = firstChoice["message"] as? [String: Any],
                    let content = message["content"] as? String {
                     
-                    print("✅ ScreenAssistant: Got OpenAI response text: \(content.prefix(100))...")
+                    print("✅ ScreenAssistant: Got \(provider.displayName) response text: \(content.prefix(100))...")
                     addAssistantMessage(content)
                 } else {
                     if let error = json["error"] as? [String: Any] {
-                        handleOpenAIError(error: error)
+                        handleOpenAIError(error: error, provider: provider)
                     } else {
-                        print("❌ ScreenAssistant: Unexpected OpenAI response format")
-                        addAssistantMessage("Error: Unexpected response format from OpenAI")
+                        print("❌ ScreenAssistant: Unexpected \(provider.displayName) response format")
+                        addAssistantMessage("Error: Unexpected response format from \(provider.displayName)")
                     }
                 }
             }
         } catch {
-            print("❌ ScreenAssistant: OpenAI JSON parsing error - \(error)")
+            print("❌ ScreenAssistant: \(provider.displayName) JSON parsing error - \(error)")
             addAssistantMessage("Error: Failed to parse response - \(error.localizedDescription)")
         }
     }
@@ -1259,12 +1297,12 @@ class ScreenAssistantManager: NSObject, ObservableObject {
         addAssistantMessage(userFriendlyMessage)
     }
     
-    private func handleOpenAIError(error: [String: Any]) {
+    private func handleOpenAIError(error: [String: Any], provider: AIModelProvider = .openai) {
         if let message = error["message"] as? String {
-            let userFriendlyMessage = "❌ **OpenAI Error**\n\n\(message)"
+            let userFriendlyMessage = "❌ **\(provider.displayName) Error**\n\n\(message)"
             addAssistantMessage(userFriendlyMessage)
         } else {
-            addAssistantMessage("❌ **OpenAI Error**\n\nAn unknown error occurred with OpenAI.")
+            addAssistantMessage("❌ **\(provider.displayName) Error**\n\nAn unknown error occurred with \(provider.displayName).")
         }
     }
     

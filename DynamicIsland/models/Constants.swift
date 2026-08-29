@@ -753,6 +753,7 @@ enum AIModelProvider: String, CaseIterable, Identifiable, Defaults.Serializable 
     case claude = "Claude"
     case local = "Local Model"
     case groq = "Groq"
+    case ollamaCloud = "Ollama Cloud"
     
     var id: String { self.rawValue }
     
@@ -767,6 +768,7 @@ enum AIModelProvider: String, CaseIterable, Identifiable, Defaults.Serializable 
         case .claude: return "Anthropic's Claude with strong analytical skills"
         case .local: return "Local AI model (Ollama or similar)"
         case .groq: return "Groq's fast inference for OpenAI-compatible models"
+        case .ollamaCloud: return "Ollama's hosted cloud models, no local GPU required"
         }
     }
     
@@ -813,6 +815,15 @@ enum AIModelProvider: String, CaseIterable, Identifiable, Defaults.Serializable 
                 AIModel(id: "llama-3.1-8b-instant", name: "Llama 3.1 8B Instant", supportsThinking: false),
                 AIModel(id: "qwen-qwq-32b", name: "Qwen QWQ 32B", supportsThinking: false),
                 AIModel(id: "mixtral-8x7b-32768", name: "Mixtral 8x7B", supportsThinking: false)
+            ]
+        case .ollamaCloud:
+            return [
+                AIModel(id: "gpt-oss:120b", name: "GPT-OSS 120B", supportsThinking: true),
+                AIModel(id: "gpt-oss:20b", name: "GPT-OSS 20B", supportsThinking: true),
+                AIModel(id: "deepseek-v4-flash", name: "DeepSeek V4 Flash", supportsThinking: true),
+                AIModel(id: "qwen3.5", name: "Qwen 3.5", supportsThinking: false),
+                AIModel(id: "minimax-m3", name: "MiniMax M3", supportsThinking: false),
+                AIModel(id: "kimi-k2.6", name: "Kimi K2.6", supportsThinking: false)
             ]
         }
     }
@@ -1301,6 +1312,7 @@ extension Defaults.Keys {
     static let openaiApiKey = Key<String>("openaiApiKey", default: "")
     static let claudeApiKey = Key<String>("claudeApiKey", default: "")
     static let groqApiKey = Key<String>("groqApiKey", default: "")
+    static let ollamaCloudApiKey = Key<String>("ollamaCloudApiKey", default: "")
     static let selectedAIProvider = Key<AIModelProvider>("selectedAIProvider", default: .gemini)
     static let selectedAIModel = Key<AIModel?>("selectedAIModel", default: nil)
     static let enableThinkingMode = Key<Bool>("enableThinkingMode", default: false)
