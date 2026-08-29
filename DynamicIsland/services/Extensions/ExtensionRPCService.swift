@@ -34,6 +34,7 @@ final class ExtensionRPCService {
     private let notchManager = ExtensionNotchExperienceManager.shared
     private let authorizationManager = ExtensionAuthorizationManager.shared
     private let mediaSourceManager = ExtensionMediaSourceManager.shared
+    private let calendarSourceManager = ExtensionCalendarSourceManager.shared
 
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
@@ -125,6 +126,16 @@ final class ExtensionRPCService {
 
         case "atoll.publishNowPlayingState":
             result = handlePublishNowPlayingState(params: request.params, id: request.id)
+
+        // MARK: Calendar Source
+        case "atoll.registerCalendarSource":
+            result = handleRegisterCalendarSource(params: request.params, id: request.id)
+
+        case "atoll.unregisterCalendarSource":
+            result = handleUnregisterCalendarSource(params: request.params, id: request.id)
+
+        case "atoll.publishCalendarState":
+            result = handlePublishCalendarState(params: request.params, id: request.id)
 
         default:
             result = RPCErrorResponse(
@@ -684,6 +695,63 @@ final class ExtensionRPCService {
             timestamp: Date()
         )
         mediaSourceManager.updateNowPlaying(state)
+        return RPCSuccessResponse(result: ["success": .bool(true)], id: id)
+    }
+
+    // MARK: - Calendar Source
+
+    private func handleRegisterCalendarSource(params: RPCParams?, id: String) -> Codable {
+        guard let sourceID = params?["sourceID"]?.stringValue, !sourceID.isEmpty else {
+            return errorResponse(code: RPCErrorCode.invalidParams, message: "Missing sourceID", id: id)
+        }
+        guard let name = params?["name"]?.stringValue, !name.isEmpty else {
+            return errorResponse(code: RPCErrorCode.invalidParams, message: "Missing name", id: id)
+        }
+        guard authorizationManager.canProcessCalendarSourceRequest(from: bundleIdentifier) else {
+            return errorResponse(code: RPCErrorCode.unauthorized, message: "Calendar source scope not granted", id: id)
+        }
+
+        let descriptor = ExtensionCalendarSourceDescriptor(
+            sourceID: sourceID,
+            bundleIdentifier: bundleIdentifier,
+            name: name,
+            accountLabel: params?["accountLabel"]?.stringValue
+        )
+        calendarSourceManager.register(descriptor)
+        authorizationManager.recordActivity(for: bundleIdentifier, scope: .calendarSource)
+        logDiagnostics("RPC: Registered calendar source \(sourceID) (\(name)) from \(bundleIdentifier)")
+        return RPCSuccessResponse(result: ["success": .bool(true)], id: id)
+    }
+
+    private func handleUnregisterCalendarSource(params: RPCParams?, id: String) -> Codable {
+        guard let sourceID = params?["sourceID"]?.stringValue, !sourceID.isEmpty else {
+            return errorResponse(code: RPCErrorCode.invalidParams, message: "Missing sourceID", id: id)
+        }
+        calendarSourceManager.unregister(sourceID: sourceID, bundleIdentifier: bundleIdentifier)
+        logDiagnostics("RPC: Unregistered calendar source \(sourceID) from \(bundleIdentifier)")
+        return RPCSuccessResponse(result: ["success": .bool(true)], id: id)
+    }
+
+    private func handlePublishCalendarState(params: RPCParams?, id: String) -> Codable {
+        guard let sourceID = params?["sourceID"]?.stringValue, !sourceID.isEmpty else {
+            return errorResponse(code: RPCErrorCode.invalidParams, message: "Missing sourceID", id: id)
+        }
+        guard calendarSourceManager.owner(of: sourceID) == bundleIdentifier else {
+            return errorResponse(code: RPCErrorCode.unauthorized, message: "sourceID not owned by this connection", id: id)
+        }
+        guard let calendarsData = params?.jsonData(for: "calendars"),
+              let calendars = try? decoder.decode([CalendarSourceCalendarPayload].self, from: calendarsData)
+        else {
+            return errorResponse(code: RPCErrorCode.invalidParams, message: "Missing or invalid calendars", id: id)
+        }
+
+        var events: [CalendarSourceEventPayload] = []
+        if let eventsData = params?.jsonData(for: "events"),
+           let decodedEvents = try? decoder.decode([CalendarSourceEventPayload].self, from: eventsData) {
+            events = decodedEvents
+        }
+
+        calendarSourceManager.updateState(sourceID: sourceID, calendars: calendars, events: events)
         return RPCSuccessResponse(result: ["success": .bool(true)], id: id)
     }
 

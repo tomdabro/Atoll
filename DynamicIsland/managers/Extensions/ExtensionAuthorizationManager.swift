@@ -111,7 +111,7 @@ final class ExtensionAuthorizationManager: ObservableObject {
                 record.widgetTimestamps.append(now)
             case .notchExperiences:
                 record.notchExperienceTimestamps.append(now)
-            case .fileSharing, .mediaSource:
+            case .fileSharing, .mediaSource, .calendarSource:
                 record.activityTimestamps.append(now)
             }
             record.activityTimestamps = flushOldTimestamps(record.activityTimestamps)
@@ -160,6 +160,10 @@ final class ExtensionAuthorizationManager: ObservableObject {
 
     func canProcessMediaSourceRequest(from bundleIdentifier: String) -> Bool {
         preflight(bundleIdentifier: bundleIdentifier, scope: .mediaSource)
+    }
+
+    func canProcessCalendarSourceRequest(from bundleIdentifier: String) -> Bool {
+        preflight(bundleIdentifier: bundleIdentifier, scope: .calendarSource)
     }
 
     func recordDeniedRequest(bundleIdentifier: String, reason: String) {

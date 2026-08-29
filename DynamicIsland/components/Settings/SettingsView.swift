@@ -3577,6 +3577,7 @@ private struct VisualizerStyleDemo: View {
 
 struct CalendarSettings: View {
     @ObservedObject private var calendarManager = CalendarManager.shared
+    @ObservedObject private var calendarSourceManager = ExtensionCalendarSourceManager.shared
     @Default(.showCalendar) var showCalendar: Bool
     @Default(.enableLyrics) private var enableLyrics
     @Default(.enableReminderLiveActivity) var enableReminderLiveActivity
@@ -3635,9 +3636,7 @@ struct CalendarSettings: View {
 
     var body: some View {
         Form {
-            GoogleCalendarSettingsSection()
-
-            if !calendarManager.hasCalendarAccess || !calendarManager.hasReminderAccess {
+            if (!calendarManager.hasCalendarAccess || !calendarManager.hasReminderAccess) && calendarSourceManager.sources.isEmpty {
                 Text("Calendar or Reminder access is denied. Please enable it in System Settings.")
                     .foregroundColor(.red)
                     .multilineTextAlignment(.center)
@@ -3672,6 +3671,31 @@ struct CalendarSettings: View {
                         Spacer()
                         Text(statusText(for: calendarManager.reminderAuthorizationStatus))
                             .foregroundColor(color(for: calendarManager.reminderAuthorizationStatus))
+                    }
+                }
+
+                Section(header: Text("Calendar Sources"), footer: Text("Third-party calendars (e.g. Google Calendar) are added via the AtollPluginManager broker app, not here — connect them there and they'll appear below and in the calendar list under their own account name.").font(.caption).foregroundStyle(.secondary)) {
+                    if calendarSourceManager.sources.isEmpty {
+                        Text("No third-party calendar sources connected.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(calendarSourceManager.sources.values.sorted { $0.sourceID < $1.sourceID }, id: \.sourceID) { source in
+                            HStack(spacing: 8) {
+                                Circle()
+                                    .fill(Color.green)
+                                    .frame(width: 8, height: 8)
+                                Text(source.name)
+                                if let accountLabel = source.accountLabel, !accountLabel.isEmpty {
+                                    Text(accountLabel)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Text("\(calendarSourceManager.calendarsBySource[source.sourceID]?.count ?? 0) calendars")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
                     }
                 }
 

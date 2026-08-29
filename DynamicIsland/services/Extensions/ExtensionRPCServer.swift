@@ -348,6 +348,7 @@ final class ExtensionRPCServer {
         case .failed, .cancelled:
             if let bundleIdentifier = connections[connID]?.bundleIdentifier {
                 ExtensionMediaSourceManager.shared.unregisterAll(forBundleIdentifier: bundleIdentifier)
+                ExtensionCalendarSourceManager.shared.unregisterAll(forBundleIdentifier: bundleIdentifier)
             }
             connections.removeValue(forKey: connID)
             logDiagnostics("RPC client disconnected (id: \(connID.uuidString.prefix(8)))")
