@@ -52,6 +52,7 @@ enum VisualizerStyle: String, CaseIterable, Identifiable, Codable, Defaults.Seri
     case wave = "Wave"
     case dots = "Dots"
     case mirror = "Mirror"
+    case line = "Line"
 
     var id: String { rawValue }
     var displayName: String { rawValue }

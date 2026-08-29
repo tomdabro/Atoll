@@ -3550,6 +3550,8 @@ private struct VisualizerStyleDemo: View {
             DotsVisualizerShape(magnitudes: magnitudes).fill(Color.accentColor)
         case .mirror:
             MirrorVisualizerShape(magnitudes: magnitudes).fill(Color.accentColor)
+        case .line:
+            LineHistoryVisualizerShape(history: demoHistory(at: time)).fill(Color.accentColor)
         }
     }
 
@@ -3558,6 +3560,17 @@ private struct VisualizerStyleDemo: View {
             let phase = Double(index) * 0.6
             let wave = (sin(time * 2.4 + phase) + 1) / 2 // 0...1
             return Float(0.2 + wave * 0.7)
+        }
+    }
+
+    /// Samples the same synthetic wave at successive past offsets, so the
+    /// line demo scrolls exactly like the real rolling-history buffer would
+    /// without needing mutable state in this otherwise-stateless view.
+    private func demoHistory(at time: TimeInterval, count: Int = 24, sampleInterval: TimeInterval = 0.08) -> [Float] {
+        (0..<count).map { index in
+            let sampleTime = time - Double(count - 1 - index) * sampleInterval
+            let wave = (sin(sampleTime * 2.4) + sin(sampleTime * 1.1 + 1.3) * 0.4 + 1.4) / 2.8
+            return Float(max(0.1, min(1, wave)))
         }
     }
 }

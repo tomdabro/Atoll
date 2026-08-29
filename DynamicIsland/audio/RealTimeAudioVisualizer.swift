@@ -117,6 +117,37 @@ struct MirrorVisualizerShape: Shape {
     }
 }
 
+/// A continuous dotted line tracing a rolling history of overall level --
+/// unlike the other styles (a snapshot of the current magnitude bands),
+/// this plots one aggregate sample per tick over time, closest to cliamp's
+/// own scrolling `Wave` visualizer.
+struct LineHistoryVisualizerShape: Shape {
+    var history: [Float]
+
+    var animatableData: AnimatableVector {
+        get { AnimatableVector(values: history) }
+        set { history = newValue.values }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let count = history.count
+        guard count > 1 else { return path }
+
+        let dotSize: CGFloat = 1.5
+        let stepX = rect.width / CGFloat(count - 1)
+
+        for (index, value) in history.enumerated() {
+            let scale = max(0.08, min(1.0, CGFloat(value) * 1.5 + 0.08))
+            let x = rect.minX + CGFloat(index) * stepX
+            let y = rect.maxY - scale * rect.height
+            let dotRect = CGRect(x: x - dotSize / 2, y: y - dotSize / 2, width: dotSize, height: dotSize)
+            path.addRoundedRect(in: dotRect, cornerSize: CGSize(width: dotSize / 2, height: dotSize / 2))
+        }
+        return path
+    }
+}
+
 /// Renders `Defaults[.visualizerStyle]` from live `AudioTap` magnitudes,
 /// replacing the retired NSView/CAShapeLayer-based `RealTimeAudioSpectrum`.
 /// Used exclusively as `.mask {}` content by every caller, so styles only
@@ -126,8 +157,11 @@ struct RealTimeAudioVisualizerView: View {
     @Binding var isPlaying: Bool
     @Default(.visualizerStyle) private var visualizerStyle
 
+    private static let historyLength = 24
+
     @State private var timer: Timer?
     @State private var magnitudes: [Float] = Array(repeating: 0, count: Defaults[.visualizerBarCount])
+    @State private var history: [Float] = Array(repeating: 0, count: RealTimeAudioVisualizerView.historyLength)
 
     var body: some View {
         visualizerShape
@@ -158,6 +192,8 @@ struct RealTimeAudioVisualizerView: View {
             DotsVisualizerShape(magnitudes: magnitudes).fill(.white)
         case .mirror:
             MirrorVisualizerShape(magnitudes: magnitudes).fill(.white)
+        case .line:
+            LineHistoryVisualizerShape(history: history).fill(.white)
         }
     }
 
@@ -167,8 +203,13 @@ struct RealTimeAudioVisualizerView: View {
             let tapMagnitudes = AudioTap.shared.getSmoothedMagnitudes()
             let barCount = Defaults[.visualizerBarCount]
             let sliced = tapMagnitudes.count >= barCount ? Array(tapMagnitudes.prefix(barCount)) : tapMagnitudes
+            let level = tapMagnitudes.isEmpty ? 0 : tapMagnitudes.reduce(0, +) / Float(tapMagnitudes.count)
             withAnimation(.linear(duration: 1.0 / 30.0)) {
                 magnitudes = sliced
+                history.append(level)
+                if history.count > Self.historyLength {
+                    history.removeFirst(history.count - Self.historyLength)
+                }
             }
         }
         RunLoop.main.add(newTimer, forMode: .common)
@@ -183,6 +224,7 @@ struct RealTimeAudioVisualizerView: View {
     private func resetMagnitudes() {
         withAnimation(.easeOut(duration: 0.3)) {
             magnitudes = Array(repeating: 0, count: magnitudes.count)
+            history = Array(repeating: 0, count: Self.historyLength)
         }
     }
 }
