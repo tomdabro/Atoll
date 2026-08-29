@@ -20,6 +20,7 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
+import Combine
 import Defaults
 import EventKit
 import SwiftUI
@@ -56,6 +57,15 @@ class CalendarManager: ObservableObject {
     private var lastLockScreenEventsFetchDate: Date?
     private let lockScreenRefreshInterval: TimeInterval = 15
     private var lockScreenRefreshTask: Task<Void, Never>?
+    /// Third-party calendar sources (the broker) publish push-based, not on
+    /// EventKit's own change notification -- without this, a newly
+    /// registered source's calendars/events would never appear: nothing
+    /// else ever re-runs reloadCalendarAndReminderLists() after the one
+    /// call in init(), which normally fires before the broker has even
+    /// connected. Debounced since one poll publish touches two separate
+    /// @Published properties (calendars then events), each firing
+    /// objectWillChange.
+    private var calendarSourceCancellable: AnyCancellable?
 
     var hasCalendarAccess: Bool { isAuthorized(calendarAuthorizationStatus) }
     var hasReminderAccess: Bool { isAuthorized(reminderAuthorizationStatus) }
@@ -64,6 +74,16 @@ class CalendarManager: ObservableObject {
         currentWeekStartDate = CalendarManager.startOfDay(Date())
         setupEventStoreChangedObserver()
         startLockScreenRefreshLoop()
+        calendarSourceCancellable = ExtensionCalendarSourceManager.shared.objectWillChange
+            .debounce(for: .seconds(1), scheduler: DispatchQueue.main)
+            .sink { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    await self.reloadCalendarAndReminderLists()
+                    await self.updateEvents(force: true)
+                    await self.updateLockScreenEvents(force: true)
+                }
+            }
         Task {
             await reloadCalendarAndReminderLists()
         }
