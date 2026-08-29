@@ -8402,9 +8402,6 @@ struct ScreenAssistantSettings: View {
     @ObservedObject var screenAssistantManager = ScreenAssistantManager.shared
     @Default(.enableScreenAssistant) var enableScreenAssistant
     @Default(.screenAssistantDisplayMode) var screenAssistantDisplayMode
-    @Default(.geminiApiKey) var geminiApiKey
-    @State private var apiKeyText = ""
-    @State private var showingApiKey = false
 
     private func highlightID(_ title: String) -> String {
         SettingsTab.screenAssistant.highlightID(for: title)
@@ -8425,58 +8422,67 @@ struct ScreenAssistantSettings: View {
 
             if enableScreenAssistant {
                 Section {
-                    HStack {
-                        Text("Gemini API Key")
-                        Spacer()
-                        if geminiApiKey.isEmpty {
-                            Text("Not Set")
-                                .foregroundColor(.red)
-                        } else {
-                            Text("••••••••")
-                                .foregroundColor(.green)
-                        }
+                    AIProviderAPIKeyRow(
+                        title: "Gemini API Key",
+                        key: .geminiApiKey,
+                        placeholder: "Enter your Gemini API Key",
+                        helpCaption: "Get your free API key from Google AI Studio",
+                        linkLabel: "Open Google AI Studio",
+                        helpURL: URL(string: "https://aistudio.google.com/app/apikey")
+                    )
 
-                        Button(showingApiKey ? "Hide" : (geminiApiKey.isEmpty ? "Set" : "Change")) {
-                            if showingApiKey {
-                                showingApiKey = false
-                                if !apiKeyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                    Defaults[.geminiApiKey] = apiKeyText
-                                }
-                                apiKeyText = ""
-                            } else {
-                                showingApiKey = true
-                                apiKeyText = geminiApiKey
-                            }
-                        }
-                    }
+                    AIProviderAPIKeyRow(
+                        title: "OpenAI API Key",
+                        key: .openaiApiKey,
+                        placeholder: "Enter your OpenAI API Key",
+                        helpCaption: "Get your API key from the OpenAI Platform",
+                        linkLabel: "Open OpenAI Platform",
+                        helpURL: URL(string: "https://platform.openai.com/api-keys")
+                    )
 
-                    if showingApiKey {
-                        VStack(alignment: .leading, spacing: 8) {
-                            SecureField("Enter your Gemini API Key", text: $apiKeyText)
-                                .textFieldStyle(.roundedBorder)
+                    AIProviderAPIKeyRow(
+                        title: "Claude API Key",
+                        key: .claudeApiKey,
+                        placeholder: "Enter your Claude API Key",
+                        helpCaption: "Get your API key from the Anthropic Console",
+                        linkLabel: "Open Anthropic Console",
+                        helpURL: URL(string: "https://console.anthropic.com/settings/keys")
+                    )
 
-                            Text("Get your free API key from Google AI Studio")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                    AIProviderAPIKeyRow(
+                        title: "Groq API Key",
+                        key: .groqApiKey,
+                        placeholder: "Enter your Groq API Key",
+                        helpCaption: "Get your API key from the Groq Console",
+                        linkLabel: "Open Groq Console",
+                        helpURL: URL(string: "https://console.groq.com/keys")
+                    )
 
-                            HStack {
-                                Button("Open Google AI Studio") {
-                                    NSWorkspace.shared.open(URL(string: "https://aistudio.google.com/app/apikey")!)
-                                }
-                                .buttonStyle(.link)
+                    AIProviderAPIKeyRow(
+                        title: "Ollama Cloud API Key",
+                        key: .ollamaCloudApiKey,
+                        placeholder: "Enter your Ollama Cloud API Key",
+                        helpCaption: "Get your API key from ollama.com/settings/keys",
+                        linkLabel: "Open Ollama Cloud Keys",
+                        helpURL: URL(string: "https://ollama.com/settings/keys")
+                    )
 
-                                Spacer()
+                    AIProviderAPIKeyRow(
+                        title: "Local Endpoint",
+                        key: .localModelEndpoint,
+                        placeholder: "http://localhost:11434",
+                        helpCaption: "Ollama or any compatible local API endpoint",
+                        linkLabel: nil,
+                        helpURL: nil,
+                        isSecure: false
+                    )
+                } header: {
+                    Text("API Keys")
+                } footer: {
+                    Text("Configure an API key for any provider you want to use in the Screen Assistant model picker. Only providers with a key configured can be selected.")
+                }
 
-                                Button("Save") {
-                                    Defaults[.geminiApiKey] = apiKeyText
-                                    showingApiKey = false
-                                    apiKeyText = ""
-                                }
-                                .disabled(apiKeyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                            }
-                        }
-                    }
-
+                Section {
                     HStack {
                         Text("Display Mode")
                         Spacer()
@@ -8572,6 +8578,105 @@ struct ScreenAssistantSettings: View {
         } else {
             let days = Int(interval / 86400)
             return "\(days)d ago"
+        }
+    }
+}
+
+/// A single API-key (or, when `isSecure` is false, plain endpoint) row used
+/// by `ScreenAssistantSettings` to let a user configure every AI provider
+/// from one place, not just the currently-selected one.
+struct AIProviderAPIKeyRow: View {
+    let title: String
+    let placeholder: String
+    let helpCaption: String
+    let linkLabel: String?
+    let helpURL: URL?
+    var isSecure: Bool = true
+
+    @Default private var storedValue: String
+    @State private var isEditing = false
+    @State private var draft = ""
+
+    init(
+        title: String,
+        key: Defaults.Key<String>,
+        placeholder: String,
+        helpCaption: String,
+        linkLabel: String?,
+        helpURL: URL?,
+        isSecure: Bool = true
+    ) {
+        self.title = title
+        self.placeholder = placeholder
+        self.helpCaption = helpCaption
+        self.linkLabel = linkLabel
+        self.helpURL = helpURL
+        self.isSecure = isSecure
+        self._storedValue = Default(key)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(title)
+                Spacer()
+                if storedValue.isEmpty {
+                    Text("Not Set")
+                        .foregroundColor(.red)
+                } else {
+                    Text(isSecure ? "••••••••" : storedValue)
+                        .foregroundColor(.green)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+
+                Button(isEditing ? "Hide" : (storedValue.isEmpty ? "Set" : "Change")) {
+                    if isEditing {
+                        isEditing = false
+                        if !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            storedValue = draft
+                        }
+                        draft = ""
+                    } else {
+                        isEditing = true
+                        draft = storedValue
+                    }
+                }
+            }
+
+            if isEditing {
+                VStack(alignment: .leading, spacing: 8) {
+                    if isSecure {
+                        SecureField(placeholder, text: $draft)
+                            .textFieldStyle(.roundedBorder)
+                    } else {
+                        TextField(placeholder, text: $draft)
+                            .textFieldStyle(.roundedBorder)
+                    }
+
+                    Text(helpCaption)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    HStack {
+                        if let helpURL, let linkLabel {
+                            Button(linkLabel) {
+                                NSWorkspace.shared.open(helpURL)
+                            }
+                            .buttonStyle(.link)
+                        }
+
+                        Spacer()
+
+                        Button("Save") {
+                            storedValue = draft
+                            isEditing = false
+                            draft = ""
+                        }
+                        .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    }
+                }
+            }
         }
     }
 }

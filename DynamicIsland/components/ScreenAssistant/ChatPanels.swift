@@ -497,7 +497,12 @@ struct ChatInputView: View {
     }
     
     private func openModelSelection() {
-        let panel = ModelSelectionPanel()
+        let panel: ModelSelectionPanel
+        if let existing = NSApp.windows.first(where: { $0 is ModelSelectionPanel }) as? ModelSelectionPanel {
+            panel = existing
+        } else {
+            panel = ModelSelectionPanel()
+        }
         panel.positionInCenter()
         panel.makeKeyAndOrderFront(nil)
         panel.orderFrontRegardless()

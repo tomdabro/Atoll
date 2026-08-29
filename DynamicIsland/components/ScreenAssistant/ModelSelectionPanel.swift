@@ -122,16 +122,6 @@ struct ModelSelectionView: View {
     @State private var selectedModel: AIModel? = Defaults[.selectedAIModel]
     @State private var enableThinking: Bool = Defaults[.enableThinkingMode]
     
-    // API Keys
-    @State private var geminiApiKey: String = Defaults[.geminiApiKey]
-    @State private var openaiApiKey: String = Defaults[.openaiApiKey]
-    @State private var claudeApiKey: String = Defaults[.claudeApiKey]
-    @State private var localEndpoint: String = Defaults[.localModelEndpoint]
-    @State private var groqApiKey: String = Defaults[.groqApiKey]
-    @State private var ollamaCloudApiKey: String = Defaults[.ollamaCloudApiKey]
-    
-    @State private var showingApiKeyAlert = false
-    
     var body: some View {
         VStack(spacing: 0) {
             // Header
@@ -251,21 +241,42 @@ struct ModelSelectionView: View {
                     
                     Divider()
                     
-                    // API Configuration
+                    // API Key Status
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("API Configuration")
+                        Text("API Key")
                             .font(.headline)
                             .foregroundColor(.primary)
                         
-                        ApiConfigurationSection(
-                            provider: selectedProvider,
-                            geminiApiKey: $geminiApiKey,
-                            openaiApiKey: $openaiApiKey,
-                            claudeApiKey: $claudeApiKey,
-                            localEndpoint: $localEndpoint,
-                            groqApiKey: $groqApiKey,
-                            ollamaCloudApiKey: $ollamaCloudApiKey
-                        )
+                        if isProviderConfigured(selectedProvider) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundColor(.green)
+                                Text("\(selectedProvider.displayName) is configured")
+                                    .font(.body)
+                                    .foregroundColor(.primary)
+                            }
+                            .padding(16)
+                            .background(Color.gray.opacity(0.1))
+                            .cornerRadius(12)
+                        } else {
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "exclamationmark.triangle.fill")
+                                        .foregroundColor(.orange)
+                                    Text("No API key configured for \(selectedProvider.displayName)")
+                                        .font(.body)
+                                        .foregroundColor(.primary)
+                                }
+                                
+                                Button("Open Settings") {
+                                    SettingsWindowController.shared.showWindow()
+                                }
+                                .buttonStyle(.link)
+                            }
+                            .padding(16)
+                            .background(Color.orange.opacity(0.1))
+                            .cornerRadius(12)
+                        }
                     }
                 }
                 .padding(.horizontal, 24)
@@ -287,7 +298,7 @@ struct ModelSelectionView: View {
                     saveConfiguration()
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(!isConfigurationValid)
+                .disabled(!isProviderConfigured(selectedProvider))
             }
             .padding(.horizontal, 24)
             .padding(.vertical, 16)
@@ -300,20 +311,20 @@ struct ModelSelectionView: View {
         }
     }
     
-    private var isConfigurationValid: Bool {
-        switch selectedProvider {
+    private func isProviderConfigured(_ provider: AIModelProvider) -> Bool {
+        switch provider {
         case .gemini:
-            return !geminiApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            return !Defaults[.geminiApiKey].trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case .openai:
-            return !openaiApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            return !Defaults[.openaiApiKey].trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case .claude:
-            return !claudeApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            return !Defaults[.claudeApiKey].trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case .local:
-            return !localEndpoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            return !Defaults[.localModelEndpoint].trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case .groq:
-            return !groqApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            return !Defaults[.groqApiKey].trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case .ollamaCloud:
-            return !ollamaCloudApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            return !Defaults[.ollamaCloudApiKey].trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
     }
     
@@ -322,13 +333,6 @@ struct ModelSelectionView: View {
         selectedModel = Defaults[.selectedAIModel]
         ensureValidModelSelection()
         enableThinking = Defaults[.enableThinkingMode]
-        
-        geminiApiKey = Defaults[.geminiApiKey]
-        openaiApiKey = Defaults[.openaiApiKey]
-        claudeApiKey = Defaults[.claudeApiKey]
-        localEndpoint = Defaults[.localModelEndpoint]
-        groqApiKey = Defaults[.groqApiKey]
-        ollamaCloudApiKey = Defaults[.ollamaCloudApiKey]
     }
     
     private func saveConfiguration() {
@@ -337,13 +341,6 @@ struct ModelSelectionView: View {
         Defaults[.selectedAIProvider] = selectedProvider
         Defaults[.selectedAIModel] = selectedModel
         Defaults[.enableThinkingMode] = enableThinking
-        
-        Defaults[.geminiApiKey] = geminiApiKey
-        Defaults[.openaiApiKey] = openaiApiKey
-        Defaults[.claudeApiKey] = claudeApiKey
-        Defaults[.localModelEndpoint] = localEndpoint
-        Defaults[.groqApiKey] = groqApiKey
-        Defaults[.ollamaCloudApiKey] = ollamaCloudApiKey
         
         closePanel()
         
@@ -476,103 +473,6 @@ struct ModelRow: View {
             onSelect()
         }
         .animation(.easeInOut(duration: 0.2), value: isSelected)
-    }
-}
-
-// MARK: - API Configuration Section
-struct ApiConfigurationSection: View {
-    let provider: AIModelProvider
-    @Binding var geminiApiKey: String
-    @Binding var openaiApiKey: String
-    @Binding var claudeApiKey: String
-    @Binding var localEndpoint: String
-    @Binding var groqApiKey: String
-    @Binding var ollamaCloudApiKey: String
-    
-    var body: some View {
-        VStack(spacing: 12) {
-            switch provider {
-            case .gemini:
-                ApiKeyField(
-                    title: "Gemini API Key",
-                    placeholder: "Enter your Gemini API key",
-                    value: $geminiApiKey,
-                    helpText: "Get your API key from Google AI Studio"
-                )
-                
-            case .openai:
-                ApiKeyField(
-                    title: "OpenAI API Key",
-                    placeholder: "Enter your OpenAI API key",
-                    value: $openaiApiKey,
-                    helpText: "Get your API key from OpenAI Platform"
-                )
-                
-            case .claude:
-                ApiKeyField(
-                    title: "Claude API Key",
-                    placeholder: "Enter your Claude API key",
-                    value: $claudeApiKey,
-                    helpText: "Get your API key from Anthropic Console"
-                )
-                
-            case .local:
-                ApiKeyField(
-                    title: "Local Endpoint",
-                    placeholder: "http://localhost:11434",
-                    value: $localEndpoint,
-                    helpText: "Ollama or compatible API endpoint",
-                    isSecure: false
-                )
-            case .groq:
-                ApiKeyField(
-                    title: "Groq API Key",
-                    placeholder: "Enter your Groq API key",
-                    value: $groqApiKey,
-                    helpText: "Get your API key from Groq Console"
-                )
-            case .ollamaCloud:
-                ApiKeyField(
-                    title: "Ollama Cloud API Key",
-                    placeholder: "Enter your Ollama Cloud API key",
-                    value: $ollamaCloudApiKey,
-                    helpText: "Get your API key from ollama.com/settings/keys"
-                )
-            }
-        }
-        .padding(16)
-        .background(Color.gray.opacity(0.05))
-        .cornerRadius(12)
-    }
-}
-
-// MARK: - API Key Field
-struct ApiKeyField: View {
-    let title: String
-    let placeholder: String
-    @Binding var value: String
-    let helpText: String
-    var isSecure: Bool = true
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.subheadline)
-                .fontWeight(.medium)
-                .foregroundColor(.primary)
-            
-            if isSecure {
-                SecureField(placeholder, text: $value)
-                    .textFieldStyle(.roundedBorder)
-            } else {
-                TextField(placeholder, text: $value)
-                    .textFieldStyle(.roundedBorder)
-            }
-            
-            Text(helpText)
-                .font(.caption)
-                .foregroundColor(.secondary)
-        }
     }
 }
 
