@@ -53,6 +53,9 @@ enum VisualizerStyle: String, CaseIterable, Identifiable, Codable, Defaults.Seri
     case dots = "Dots"
     case mirror = "Mirror"
     case line = "Line"
+    case outline = "Outline"
+    case blocks = "Blocks"
+    case peak = "Peak"
 
     var id: String { rawValue }
     var displayName: String { rawValue }

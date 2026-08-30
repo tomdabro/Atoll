@@ -3552,6 +3552,12 @@ private struct VisualizerStyleDemo: View {
             MirrorVisualizerShape(magnitudes: magnitudes).fill(Color.accentColor)
         case .line:
             LineHistoryVisualizerShape(history: demoHistory(at: time)).fill(Color.accentColor)
+        case .outline:
+            OutlineVisualizerShape(magnitudes: magnitudes).fill(Color.accentColor)
+        case .blocks:
+            BlocksVisualizerShape(magnitudes: magnitudes).fill(Color.accentColor)
+        case .peak:
+            PeakVisualizerShape(magnitudes: magnitudes, peaks: demoPeaks(at: time)).fill(Color.accentColor)
         }
     }
 
@@ -3560,6 +3566,19 @@ private struct VisualizerStyleDemo: View {
             let phase = Double(index) * 0.6
             let wave = (sin(time * 2.4 + phase) + 1) / 2 // 0...1
             return Float(0.2 + wave * 0.7)
+        }
+    }
+
+    /// A recent local maximum per band, standing in for the real decayed
+    /// peak-hold state -- good enough for a small, always-looping thumbnail.
+    private func demoPeaks(at time: TimeInterval) -> [Float] {
+        (0..<6).map { index in
+            let phase = Double(index) * 0.6
+            return (0..<6).map { offset -> Float in
+                let t = time - Double(offset) * 0.05
+                let wave = (sin(t * 2.4 + phase) + 1) / 2
+                return Float(0.2 + wave * 0.7)
+            }.max() ?? 0
         }
     }
 

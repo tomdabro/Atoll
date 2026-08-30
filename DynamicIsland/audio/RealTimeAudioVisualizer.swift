@@ -117,6 +117,116 @@ struct MirrorVisualizerShape: Shape {
     }
 }
 
+/// Same bar layout as `BarsVisualizerShape` but hollow -- cliamp's
+/// `BarsOutline`. Built as a stroked path rather than a filled/unfilled
+/// rect pair so it still composites correctly as a `.mask {}` silhouette.
+struct OutlineVisualizerShape: Shape {
+    var magnitudes: [Float]
+
+    var animatableData: AnimatableVector {
+        get { AnimatableVector(values: magnitudes) }
+        set { magnitudes = newValue.values }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let count = magnitudes.count
+        guard count > 0 else { return path }
+
+        let spacing: CGFloat = 2
+        let barWidth = max(1, (rect.width - CGFloat(count - 1) * spacing) / CGFloat(count))
+
+        for (index, magnitude) in magnitudes.enumerated() {
+            let scale = max(0.2, min(1.0, CGFloat(magnitude) * 1.5 + 0.2))
+            let barHeight = rect.height * scale
+            let x = rect.minX + CGFloat(index) * (barWidth + spacing)
+            let barRect = CGRect(x: x, y: rect.maxY - barHeight, width: barWidth, height: barHeight)
+            path.addRoundedRect(in: barRect, cornerSize: CGSize(width: barWidth / 2, height: barWidth / 2))
+        }
+        return path.strokedPath(StrokeStyle(lineWidth: 1.25, lineJoin: .round))
+    }
+}
+
+/// Stacked LED-meter segments per band, like cliamp's `ClassicLED` --
+/// distinct blocks with gaps instead of one continuous bar.
+struct BlocksVisualizerShape: Shape {
+    var magnitudes: [Float]
+
+    var animatableData: AnimatableVector {
+        get { AnimatableVector(values: magnitudes) }
+        set { magnitudes = newValue.values }
+    }
+
+    private let segmentHeight: CGFloat = 3
+    private let segmentGap: CGFloat = 1.5
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let count = magnitudes.count
+        guard count > 0 else { return path }
+
+        let spacing: CGFloat = 2
+        let barWidth = max(1, (rect.width - CGFloat(count - 1) * spacing) / CGFloat(count))
+        let totalSegments = max(1, Int(rect.height / (segmentHeight + segmentGap)))
+
+        for (index, magnitude) in magnitudes.enumerated() {
+            let scale = max(0.2, min(1.0, CGFloat(magnitude) * 1.5 + 0.2))
+            let litSegments = max(1, Int((scale * CGFloat(totalSegments)).rounded()))
+            let x = rect.minX + CGFloat(index) * (barWidth + spacing)
+
+            for segment in 0..<litSegments {
+                let y = rect.maxY - CGFloat(segment + 1) * (segmentHeight + segmentGap) + segmentGap
+                let segmentRect = CGRect(x: x, y: y, width: barWidth, height: segmentHeight)
+                path.addRoundedRect(in: segmentRect, cornerSize: CGSize(width: 1, height: 1))
+            }
+        }
+        return path
+    }
+}
+
+/// Bars with a small peak-hold cap that jumps up with the signal and falls
+/// slowly, like cliamp's `ClassicPeak` -- `peaks` is decayed by the caller
+/// (`RealTimeAudioVisualizerView`) once per tick since a peak must persist
+/// (and keep falling) across frames where the underlying magnitude has
+/// already dropped, which a stateless `Shape` can't track on its own.
+struct PeakVisualizerShape: Shape {
+    var magnitudes: [Float]
+    var peaks: [Float]
+
+    var animatableData: AnimatableVector {
+        get { AnimatableVector(values: magnitudes + peaks) }
+        set {
+            let half = newValue.values.count / 2
+            magnitudes = Array(newValue.values[..<half])
+            peaks = Array(newValue.values[half...])
+        }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let count = magnitudes.count
+        guard count > 0, peaks.count == count else { return path }
+
+        let spacing: CGFloat = 2
+        let barWidth = max(1, (rect.width - CGFloat(count - 1) * spacing) / CGFloat(count))
+        let capHeight: CGFloat = 2
+
+        for index in 0..<count {
+            let scale = max(0.2, min(1.0, CGFloat(magnitudes[index]) * 1.5 + 0.2))
+            let barHeight = rect.height * scale
+            let x = rect.minX + CGFloat(index) * (barWidth + spacing)
+            let barRect = CGRect(x: x, y: rect.maxY - barHeight, width: barWidth, height: barHeight)
+            path.addRoundedRect(in: barRect, cornerSize: CGSize(width: barWidth / 2, height: barWidth / 2))
+
+            let peakScale = max(0.2, min(1.0, CGFloat(peaks[index]) * 1.5 + 0.2))
+            let peakY = rect.maxY - rect.height * peakScale
+            let capRect = CGRect(x: x, y: peakY - capHeight, width: barWidth, height: capHeight)
+            path.addRoundedRect(in: capRect, cornerSize: CGSize(width: 1, height: 1))
+        }
+        return path
+    }
+}
+
 /// A continuous dotted line tracing a rolling history of overall level,
 /// centered on the view's vertical middle and swinging up for louder
 /// moments, down for quieter ones -- unlike the other styles (a snapshot
@@ -164,6 +274,7 @@ struct RealTimeAudioVisualizerView: View {
 
     @State private var timer: Timer?
     @State private var magnitudes: [Float] = Array(repeating: 0, count: Defaults[.visualizerBarCount])
+    @State private var peakLevels: [Float] = Array(repeating: 0, count: Defaults[.visualizerBarCount])
     @State private var history: [Float] = Array(repeating: 0, count: RealTimeAudioVisualizerView.historyLength)
 
     var body: some View {
@@ -197,6 +308,12 @@ struct RealTimeAudioVisualizerView: View {
             MirrorVisualizerShape(magnitudes: magnitudes).fill(.white)
         case .line:
             LineHistoryVisualizerShape(history: history).fill(.white)
+        case .outline:
+            OutlineVisualizerShape(magnitudes: magnitudes).fill(.white)
+        case .blocks:
+            BlocksVisualizerShape(magnitudes: magnitudes).fill(.white)
+        case .peak:
+            PeakVisualizerShape(magnitudes: magnitudes, peaks: peakLevels).fill(.white)
         }
     }
 
@@ -207,8 +324,16 @@ struct RealTimeAudioVisualizerView: View {
             let barCount = Defaults[.visualizerBarCount]
             let sliced = tapMagnitudes.count >= barCount ? Array(tapMagnitudes.prefix(barCount)) : tapMagnitudes
             let level = tapMagnitudes.isEmpty ? 0 : tapMagnitudes.reduce(0, +) / Float(tapMagnitudes.count)
+            // Peak caps jump up instantly with the signal but fall slowly --
+            // reseed the array whenever the band count changes so a stale,
+            // differently-sized array from a prior candle count never lingers.
+            var decayedPeaks = peakLevels.count == sliced.count ? peakLevels : Array(repeating: 0, count: sliced.count)
+            for i in sliced.indices {
+                decayedPeaks[i] = max(sliced[i], decayedPeaks[i] - 0.02)
+            }
             withAnimation(.linear(duration: 1.0 / 30.0)) {
                 magnitudes = sliced
+                peakLevels = decayedPeaks
                 history.append(level)
                 if history.count > Self.historyLength {
                     history.removeFirst(history.count - Self.historyLength)
@@ -227,6 +352,7 @@ struct RealTimeAudioVisualizerView: View {
     private func resetMagnitudes() {
         withAnimation(.easeOut(duration: 0.3)) {
             magnitudes = Array(repeating: 0, count: magnitudes.count)
+            peakLevels = Array(repeating: 0, count: peakLevels.count)
             history = Array(repeating: 0, count: Self.historyLength)
         }
     }
