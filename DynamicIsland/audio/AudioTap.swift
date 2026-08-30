@@ -270,6 +270,14 @@ class AudioTap: NSObject {
         return displayMagnitudes
     }
 
+    /// Raw (unsmoothed) waveform snapshot for a real oscilloscope trace, as
+    /// opposed to the per-band loudness envelopes above — deliberately not
+    /// run through the same smoothing as `getSmoothedMagnitudes`, since an
+    /// oscilloscope is supposed to show the instantaneous waveform shape.
+    func getWaveform() -> [Float] {
+        return bridge.getWaveform().map { $0.floatValue }
+    }
+
     func startCapture() async {
         await withCheckedContinuation { continuation in
             audioQueue.async { [weak self] in

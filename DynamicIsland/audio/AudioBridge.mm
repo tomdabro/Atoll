@@ -22,6 +22,8 @@
 #import "AudioBridge.h"
 #import "AudioProcessor.hpp"
 
+#include <vector>
+
 @implementation AudioBridge {
     AudioProcessor *processor;
 }
@@ -45,6 +47,17 @@
         [magnitudes addObject:@(processor->getBand(i))];
     }
     return magnitudes;
+}
+
+- (NSArray<NSNumber *> *)getWaveform {
+    int count = processor->getWaveformSampleCount();
+    std::vector<float> buffer(count);
+    processor->getWaveform(buffer.data());
+    NSMutableArray<NSNumber *> *waveform = [NSMutableArray arrayWithCapacity:count];
+    for (int i = 0; i < count; i++) {
+        [waveform addObject:@(buffer[i])];
+    }
+    return waveform;
 }
 
 - (int)getBandCount {

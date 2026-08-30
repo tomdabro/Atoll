@@ -27,6 +27,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)processBuffer:(const float *)buffer count:(int)count;
 - (NSArray<NSNumber *> *)getSmoothedMagnitudes;
+- (NSArray<NSNumber *> *)getWaveform;
 - (int)getBandCount;
 
 @end

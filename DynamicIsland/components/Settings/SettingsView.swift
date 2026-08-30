@@ -3545,7 +3545,7 @@ private struct VisualizerStyleDemo: View {
         case .bars:
             BarsVisualizerShape(magnitudes: magnitudes).fill(Color.accentColor)
         case .wave:
-            WaveformShape(magnitudes: magnitudes, minHeight: 1).fill(Color.accentColor)
+            OscilloscopeVisualizerShape(samples: demoWaveform(at: time)).fill(Color.accentColor)
         case .dots:
             DotsVisualizerShape(magnitudes: magnitudes).fill(Color.accentColor)
         case .mirror:
@@ -3558,8 +3558,6 @@ private struct VisualizerStyleDemo: View {
             BlocksVisualizerShape(magnitudes: magnitudes).fill(Color.accentColor)
         case .peak:
             PeakVisualizerShape(magnitudes: magnitudes, peaks: demoPeaks(at: time)).fill(Color.accentColor)
-        case .heartbeat:
-            HeartbeatVisualizerShape(history: demoHistory(at: time)).fill(Color.accentColor)
         }
     }
 
@@ -3568,6 +3566,18 @@ private struct VisualizerStyleDemo: View {
             let phase = Double(index) * 0.6
             let wave = (sin(time * 2.4 + phase) + 1) / 2 // 0...1
             return Float(0.2 + wave * 0.7)
+        }
+    }
+
+    /// A synthetic raw waveform -- a couple of summed sine harmonics plus a
+    /// touch of noise -- standing in for `AudioTap.getWaveform()` so the
+    /// oscilloscope preview looks like an actual audio signal, not a smooth
+    /// single tone.
+    private func demoWaveform(at time: TimeInterval, count: Int = 64) -> [Float] {
+        (0..<count).map { index in
+            let t = time * 6 + Double(index) * 0.35
+            let wave = sin(t) * 0.6 + sin(t * 2.3 + 0.7) * 0.25 + sin(t * 5.1) * 0.1
+            return Float(wave)
         }
     }
 

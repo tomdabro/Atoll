@@ -79,6 +79,12 @@ float AudioProcessor::getBand( int i ) const
     return bandParams[i].load( std::memory_order_relaxed );
 }
 
+void AudioProcessor::getWaveform( float* out ) const
+{
+    int readIndex = waveformReadIndex.load( std::memory_order_acquire );
+    std::memcpy( out, waveformBuffers[readIndex], kWaveformSamples * sizeof( float ) );
+}
+
 void AudioProcessor::processBlock()
 {
     for ( int i = 0; i < kBands; ++i )
@@ -105,6 +111,18 @@ void AudioProcessor::processBlock()
 
         bandParams[i].store( envelopes[i], std::memory_order_relaxed );
     }
+
+    // Downsample the raw block into a small snapshot for the oscilloscope
+    // UI. Written to whichever buffer isn't currently published, then
+    // published with a single atomic store — the render thread only ever
+    // sees a fully-written buffer, never a torn one.
+    int writeIndex = 1 - waveformReadIndex.load( std::memory_order_relaxed );
+    for ( int i = 0; i < kWaveformSamples; ++i )
+    {
+        int srcIndex = i * kBlockSize / kWaveformSamples;
+        waveformBuffers[writeIndex][i] = mono[srcIndex];
+    }
+    waveformReadIndex.store( writeIndex, std::memory_order_release );
 }
 
 void AudioProcessor::setupBiquad( int idx, FilterType type, float freq,

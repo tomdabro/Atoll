@@ -33,6 +33,10 @@ class AudioProcessor {
     static constexpr float kAttack = 0.85f;   // fast rise
     static constexpr float kRelease = 0.40f;  // slower fall — more musical
     static constexpr float kGains[kBands] = { 3.0f, 4.5f, 6.0f, 9.0f, 14.0f, 24.0f };
+    // Downsampled snapshot of the raw block, exposed for a real oscilloscope
+    // trace (as opposed to the per-band envelopes above, which only carry
+    // overall loudness per frequency range, not the actual waveform shape).
+    static constexpr int kWaveformSamples = 128;
 
     float sampleRate;
     int writePos = 0;
@@ -48,6 +52,11 @@ class AudioProcessor {
     // One atomic per band — fits in a cache line
     alignas( 64 ) std::atomic< float > bandParams[kBands] = {};
 
+    // Double-buffered so the render thread never reads a snapshot mid-write;
+    // the index alone is what's published, one atomic for both buffers.
+    alignas( 64 ) std::atomic< int > waveformReadIndex{ 0 };
+    float waveformBuffers[2][kWaveformSamples] = {};
+
    public:
     explicit AudioProcessor( float sr = 48000.0f );
     ~AudioProcessor();
@@ -58,6 +67,11 @@ class AudioProcessor {
     // Called by render thread — lock-free read
     float getBand( int i ) const;
     int getBandCount() const { return kBands; }
+
+    // Called by render thread — lock-free read of the latest waveform
+    // snapshot. `out` must have room for `getWaveformSampleCount()` floats.
+    void getWaveform( float* out ) const;
+    int getWaveformSampleCount() const { return kWaveformSamples; }
 
    private:
     enum class FilterType { LowPass, BandPass, HighPass };

@@ -3,8 +3,9 @@
  * Copyright (C) 2024-2026 Atoll Contributors
  *
  * Selectable real-time render styles for the audio-reactive waveform,
- * analogous to cliamp's `v`-key visualizer cycle -- every style renders
- * from the same AudioTap magnitude bands, only the shape differs.
+ * analogous to cliamp's `v`-key visualizer cycle. Most styles render from
+ * the same AudioTap magnitude bands, only the shape differs; `Wave` is the
+ * exception, tracing raw waveform samples for a genuine oscilloscope look.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -261,42 +262,37 @@ struct LineHistoryVisualizerShape: Shape {
     }
 }
 
-/// A scrolling ECG/pulse-monitor trace over the same rolling level history
-/// as `LineHistoryVisualizerShape` -- cliamp's `Heartbeat`. Squaring the
-/// (already non-negative) level sharpens loud beats into spikes while
-/// flattening quiet passages toward a dashed baseline, instead of swinging
-/// smoothly around a center axis.
-struct HeartbeatVisualizerShape: Shape {
-    var history: [Float]
+/// A genuine oscilloscope trace over raw, unfiltered waveform samples --
+/// cliamp's real `Wave`. Unlike every other style here (all driven by the
+/// 6-band loudness envelopes, which only carry overall energy per frequency
+/// range) this follows the actual instantaneous waveform shape, so it needs
+/// its own data source: `AudioProcessor`'s raw downsampled snapshot, plumbed
+/// through `AudioBridge.getWaveform()`/`AudioTap.getWaveform()`. Samples are
+/// signed (~-1...1), drawn as a single thin centered line rather than the
+/// filled, mirrored envelope `WaveformShape` (used by the scrubber) draws.
+struct OscilloscopeVisualizerShape: Shape {
+    var samples: [Float]
 
     var animatableData: AnimatableVector {
-        get { AnimatableVector(values: history) }
-        set { history = newValue.values }
+        get { AnimatableVector(values: samples) }
+        set { samples = newValue.values }
     }
 
     func path(in rect: CGRect) -> Path {
         var path = Path()
-        let count = history.count
+        let count = samples.count
         guard count > 1 else { return path }
 
         let stepX = rect.width / CGFloat(count - 1)
-        let baseline = rect.maxY - 1
-        let amplitude = max(0, rect.height - 2)
+        let amplitude = rect.height / 2
 
-        // Dashed baseline the trace departs from and returns to between beats.
-        var dashX = rect.minX
-        while dashX < rect.maxX {
-            let dashEnd = min(dashX + 4, rect.maxX)
-            path.move(to: CGPoint(x: dashX, y: baseline))
-            path.addLine(to: CGPoint(x: dashEnd, y: baseline))
-            dashX = dashEnd + 3
-        }
-
-        for (index, value) in history.enumerated() {
-            let normalized = max(0.0, min(1.0, CGFloat(value) * 1.5))
-            let shaped = normalized * normalized
+        for (index, sample) in samples.enumerated() {
+            // Boosted for visibility, matching the per-band kGains headroom
+            // on the native side -- music rarely peaks at full scale after
+            // mixdown, so an unboosted trace reads as nearly flat.
+            let clamped = max(-1.0, min(1.0, CGFloat(sample) * 4.0))
             let x = rect.minX + CGFloat(index) * stepX
-            let y = baseline - shaped * amplitude
+            let y = rect.midY - clamped * amplitude
             if index == 0 {
                 path.move(to: CGPoint(x: x, y: y))
             } else {
@@ -318,11 +314,13 @@ struct RealTimeAudioVisualizerView: View {
     @Default(.visualizerStyle) private var visualizerStyle
 
     private static let historyLength = 24
+    private static let waveformSampleCount = 128
 
     @State private var timer: Timer?
     @State private var magnitudes: [Float] = Array(repeating: 0, count: Defaults[.visualizerBarCount])
     @State private var peakLevels: [Float] = Array(repeating: 0, count: Defaults[.visualizerBarCount])
     @State private var history: [Float] = Array(repeating: 0, count: RealTimeAudioVisualizerView.historyLength)
+    @State private var waveformSamples: [Float] = Array(repeating: 0, count: RealTimeAudioVisualizerView.waveformSampleCount)
 
     var body: some View {
         visualizerShape
@@ -348,7 +346,7 @@ struct RealTimeAudioVisualizerView: View {
         case .bars:
             BarsVisualizerShape(magnitudes: magnitudes).fill(.white)
         case .wave:
-            WaveformShape(magnitudes: magnitudes, minHeight: 1).fill(.white)
+            OscilloscopeVisualizerShape(samples: waveformSamples).fill(.white)
         case .dots:
             DotsVisualizerShape(magnitudes: magnitudes).fill(.white)
         case .mirror:
@@ -361,8 +359,6 @@ struct RealTimeAudioVisualizerView: View {
             BlocksVisualizerShape(magnitudes: magnitudes).fill(.white)
         case .peak:
             PeakVisualizerShape(magnitudes: magnitudes, peaks: peakLevels).fill(.white)
-        case .heartbeat:
-            HeartbeatVisualizerShape(history: history).fill(.white)
         }
     }
 
@@ -373,6 +369,7 @@ struct RealTimeAudioVisualizerView: View {
             let barCount = Defaults[.visualizerBarCount]
             let sliced = tapMagnitudes.count >= barCount ? Array(tapMagnitudes.prefix(barCount)) : tapMagnitudes
             let level = tapMagnitudes.isEmpty ? 0 : tapMagnitudes.reduce(0, +) / Float(tapMagnitudes.count)
+            let waveform = AudioTap.shared.getWaveform()
             // Peak caps jump up instantly with the signal but fall slowly --
             // reseed the array whenever the band count changes so a stale,
             // differently-sized array from a prior candle count never lingers.
@@ -383,6 +380,9 @@ struct RealTimeAudioVisualizerView: View {
             withAnimation(.linear(duration: 1.0 / 30.0)) {
                 magnitudes = sliced
                 peakLevels = decayedPeaks
+                if !waveform.isEmpty {
+                    waveformSamples = waveform
+                }
                 history.append(level)
                 if history.count > Self.historyLength {
                     history.removeFirst(history.count - Self.historyLength)
@@ -403,6 +403,7 @@ struct RealTimeAudioVisualizerView: View {
             magnitudes = Array(repeating: 0, count: magnitudes.count)
             peakLevels = Array(repeating: 0, count: peakLevels.count)
             history = Array(repeating: 0, count: Self.historyLength)
+            waveformSamples = Array(repeating: 0, count: waveformSamples.count)
         }
     }
 }
