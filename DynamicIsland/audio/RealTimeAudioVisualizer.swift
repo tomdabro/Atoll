@@ -205,7 +205,7 @@ struct RealTimeAudioVisualizerView: View {
         let newTimer = Timer(timeInterval: 1.0 / 30.0, repeats: true) { _ in
             let tapMagnitudes = AudioTap.shared.getSmoothedMagnitudes()
             let barCount = Defaults[.visualizerBarCount]
-            let sliced = tapMagnitudes.count >= barCount ? Array(tapMagnitudes.prefix(barCount)) : tapMagnitudes
+            let sliced = Self.resample(tapMagnitudes, to: barCount)
             let level = tapMagnitudes.isEmpty ? 0 : tapMagnitudes.reduce(0, +) / Float(tapMagnitudes.count)
             withAnimation(.linear(duration: 1.0 / 30.0)) {
                 magnitudes = sliced
@@ -217,6 +217,30 @@ struct RealTimeAudioVisualizerView: View {
         }
         RunLoop.main.add(newTimer, forMode: .common)
         timer = newTimer
+    }
+
+    /// `AudioTap` always reports a fixed 6-band spectrum (`AudioProcessor::kBands`),
+    /// independent of the user's chosen candle count -- without this, raising the
+    /// candle count past 6 left `magnitudes.count` stuck at 6 while every shape's
+    /// mask frame kept growing to fit the requested count, so the same 6 bars just
+    /// got wider and spilled out of their container instead of more bars appearing.
+    /// Linearly interpolates the real bands up to `count` points (or subsamples
+    /// down, for the rare case `count` is smaller) so every style always renders
+    /// exactly the number of elements its frame was sized for.
+    private static func resample(_ source: [Float], to count: Int) -> [Float] {
+        guard count > 0 else { return [] }
+        guard !source.isEmpty else { return Array(repeating: 0, count: count) }
+        guard source.count != count else { return source }
+        guard count > 1, source.count > 1 else { return Array(repeating: source.last ?? 0, count: count) }
+
+        let lastIndex = source.count - 1
+        return (0..<count).map { i in
+            let position = Double(i) / Double(count - 1) * Double(lastIndex)
+            let lower = Int(position)
+            let upper = min(lower + 1, lastIndex)
+            let fraction = Float(position - Double(lower))
+            return source[lower] * (1 - fraction) + source[upper] * fraction
+        }
     }
 
     private func stopTimer() {
