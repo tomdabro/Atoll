@@ -269,7 +269,15 @@ extension NSImage {
                     primaryIndex = i
                 }
             }
-            
+
+            // Vibrant mode only filters out very dark/bright/desaturated pixels
+            // per-pixel (line ~249 above); the *weighted average* of whatever
+            // passes that filter can still land dark for moody, saturated-but-
+            // dim album art (dark red, navy, maroon...), and the flat 1.10x
+            // boost below isn't enough to rescue it -- floor it the same way
+            // Legacy mode already floors its single averaged color.
+            let minBrightness: CGFloat = 0.5
+
             var primaryColor = NSColor.gray
             var pHue: CGFloat = 0, pSat: CGFloat = 0, pBri: CGFloat = 0, pAlpha: CGFloat = 1
             
@@ -285,6 +293,10 @@ extension NSImage {
                 // Step 4: Improve primary color
                 pSat = min(1.0, pSat * 1.20)
                 pBri = min(1.0, pBri * 1.10)
+                if pBri < minBrightness {
+                    pSat *= pBri / minBrightness
+                    pBri = minBrightness
+                }
                 
                 primaryColor = NSColor(hue: pHue, saturation: pSat, brightness: pBri, alpha: 1.0)
             }
@@ -325,6 +337,10 @@ extension NSImage {
                 
                 sSat = min(1.0, sSat * 1.20)
                 sBri = min(1.0, sBri * 1.10)
+                if sBri < minBrightness {
+                    sSat *= sBri / minBrightness
+                    sBri = minBrightness
+                }
                 secondaryColor = NSColor(hue: sHue, saturation: sSat, brightness: sBri, alpha: 1.0)
             } else {
                 // Fallback to complementary if no other bucket is found.
@@ -396,11 +412,24 @@ extension Color {
         // Calculate perceived brightness using the formula: (0.299*R + 0.587*G + 0.114*B)
         let perceivedBrightness = (0.2126 * red + 0.7152 * green + 0.0722 * blue)
         
+        // True black has nothing to scale toward (division by ~0 would
+        // produce NaN/Inf) -- promote it straight to a flat gray at the
+        // floor instead.
+        guard perceivedBrightness > 0.001 else {
+            return Color(white: Double(factor), opacity: Double(alpha))
+        }
+        
+        // Already at or above the floor: leave it alone. This is a *minimum*,
+        // not a target -- an already-bright color shouldn't get dimmed down
+        // to exactly `factor`.
+        guard perceivedBrightness < factor else {
+            return self
+        }
+        
         let scale = factor / perceivedBrightness
         red = min(red * scale, 1.0)
         green = min(green * scale, 1.0)
         blue = min(blue * scale, 1.0)
-        
         
         return Color(red: Double(red), green: Double(green), blue: Double(blue), opacity: Double(alpha))
     }
