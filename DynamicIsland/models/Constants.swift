@@ -56,6 +56,7 @@ enum VisualizerStyle: String, CaseIterable, Identifiable, Codable, Defaults.Seri
     case outline = "Outline"
     case blocks = "Blocks"
     case peak = "Peak"
+    case heartbeat = "Heartbeat"
 
     var id: String { rawValue }
     var displayName: String { rawValue }

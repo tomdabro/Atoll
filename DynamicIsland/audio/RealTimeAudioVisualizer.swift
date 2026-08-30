@@ -261,6 +261,53 @@ struct LineHistoryVisualizerShape: Shape {
     }
 }
 
+/// A scrolling ECG/pulse-monitor trace over the same rolling level history
+/// as `LineHistoryVisualizerShape` -- cliamp's `Heartbeat`. Squaring the
+/// (already non-negative) level sharpens loud beats into spikes while
+/// flattening quiet passages toward a dashed baseline, instead of swinging
+/// smoothly around a center axis.
+struct HeartbeatVisualizerShape: Shape {
+    var history: [Float]
+
+    var animatableData: AnimatableVector {
+        get { AnimatableVector(values: history) }
+        set { history = newValue.values }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let count = history.count
+        guard count > 1 else { return path }
+
+        let stepX = rect.width / CGFloat(count - 1)
+        let baseline = rect.maxY - 1
+        let amplitude = max(0, rect.height - 2)
+
+        // Dashed baseline the trace departs from and returns to between beats.
+        var dashX = rect.minX
+        while dashX < rect.maxX {
+            let dashEnd = min(dashX + 4, rect.maxX)
+            path.move(to: CGPoint(x: dashX, y: baseline))
+            path.addLine(to: CGPoint(x: dashEnd, y: baseline))
+            dashX = dashEnd + 3
+        }
+
+        for (index, value) in history.enumerated() {
+            let normalized = max(0.0, min(1.0, CGFloat(value) * 1.5))
+            let shaped = normalized * normalized
+            let x = rect.minX + CGFloat(index) * stepX
+            let y = baseline - shaped * amplitude
+            if index == 0 {
+                path.move(to: CGPoint(x: x, y: y))
+            } else {
+                path.addLine(to: CGPoint(x: x, y: y))
+            }
+        }
+
+        return path.strokedPath(StrokeStyle(lineWidth: 1.25, lineCap: .round, lineJoin: .round))
+    }
+}
+
 /// Renders `Defaults[.visualizerStyle]` from live `AudioTap` magnitudes,
 /// replacing the retired NSView/CAShapeLayer-based `RealTimeAudioSpectrum`.
 /// Used exclusively as `.mask {}` content by every caller, so styles only
@@ -314,6 +361,8 @@ struct RealTimeAudioVisualizerView: View {
             BlocksVisualizerShape(magnitudes: magnitudes).fill(.white)
         case .peak:
             PeakVisualizerShape(magnitudes: magnitudes, peaks: peakLevels).fill(.white)
+        case .heartbeat:
+            HeartbeatVisualizerShape(history: history).fill(.white)
         }
     }
 

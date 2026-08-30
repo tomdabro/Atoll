@@ -3558,6 +3558,8 @@ private struct VisualizerStyleDemo: View {
             BlocksVisualizerShape(magnitudes: magnitudes).fill(Color.accentColor)
         case .peak:
             PeakVisualizerShape(magnitudes: magnitudes, peaks: demoPeaks(at: time)).fill(Color.accentColor)
+        case .heartbeat:
+            HeartbeatVisualizerShape(history: demoHistory(at: time)).fill(Color.accentColor)
         }
     }
 
