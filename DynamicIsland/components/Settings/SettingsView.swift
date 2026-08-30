@@ -3347,7 +3347,7 @@ struct Media: View {
                 if Defaults[.enableRealTimeWaveform] {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Waveform style")
-                        HStack(spacing: 10) {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 60, maximum: 80), spacing: 10)], alignment: .leading, spacing: 10) {
                             ForEach(VisualizerStyle.allCases) { style in
                                 VisualizerStyleOption(
                                     style: style,
