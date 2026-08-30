@@ -50,6 +50,7 @@ struct CustomVisualizer: Codable, Hashable, Equatable, Defaults.Serializable {
 enum VisualizerStyle: String, CaseIterable, Identifiable, Codable, Defaults.Serializable {
     case bars = "Bars"
     case wave = "Wave"
+    case envelope = "Envelope"
     case dots = "Dots"
     case mirror = "Mirror"
     case line = "Line"

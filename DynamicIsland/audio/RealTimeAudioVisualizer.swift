@@ -347,6 +347,8 @@ struct RealTimeAudioVisualizerView: View {
             BarsVisualizerShape(magnitudes: magnitudes).fill(.white)
         case .wave:
             OscilloscopeVisualizerShape(samples: waveformSamples).fill(.white)
+        case .envelope:
+            WaveformShape(magnitudes: magnitudes, minHeight: 1).fill(.white)
         case .dots:
             DotsVisualizerShape(magnitudes: magnitudes).fill(.white)
         case .mirror:

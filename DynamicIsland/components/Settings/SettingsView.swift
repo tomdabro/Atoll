@@ -3546,6 +3546,8 @@ private struct VisualizerStyleDemo: View {
             BarsVisualizerShape(magnitudes: magnitudes).fill(Color.accentColor)
         case .wave:
             OscilloscopeVisualizerShape(samples: demoWaveform(at: time)).fill(Color.accentColor)
+        case .envelope:
+            WaveformShape(magnitudes: magnitudes, minHeight: 1).fill(Color.accentColor)
         case .dots:
             DotsVisualizerShape(magnitudes: magnitudes).fill(Color.accentColor)
         case .mirror:
