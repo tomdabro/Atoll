@@ -80,10 +80,13 @@ struct MinimalisticMusicPlayerView: View {
                         let spacing: CGFloat = 10
                         // The right-side time label in the progress bar below is 42pt wide,
                         // trailing-aligned, so its center sits 21pt from the right edge.
-                        // We use the same 42pt block for the visualizer so the candles
-                        // are perfectly centred above the "-00:00" text.
-                        let vizBlockWidth: CGFloat = useMusicVisualizer ? 42 : 0
-                        let visualizerBarWidth: CGFloat = useMusicVisualizer ? 24 : 0
+                        // The candle block scales with the visualizer candle count (Settings
+                        // → Media → Music Visualizer) instead of being capped at a fixed
+                        // width, so raising the candle count actually widens the wavelength
+                        // toward the album art rather than squeezing more candles into the
+                        // same slot.
+                        let visualizerBarWidth: CGFloat = useMusicVisualizer ? CGFloat(Defaults[.visualizerBarCount]) * 4 : 0
+                        let vizBlockWidth: CGFloat = useMusicVisualizer ? visualizerBarWidth + 18 : 0
                         // Leave an extra 8pt gap between the title text and the visualizer.
                         let textWidth = max(0, headerGeo.size.width - albumArtWidth - spacing - (useMusicVisualizer ? (vizBlockWidth + spacing) : 0))
                         HStack(alignment: .center, spacing: spacing) {
@@ -327,7 +330,9 @@ struct MinimalisticMusicPlayerView: View {
         GeometryReader { geo in
             let totalWidth = geo.size.width
             let albumArtSize: CGFloat = 50
-            let visualizerWidth: CGFloat = useMusicVisualizer ? 24 : 0
+            // Scales with the visualizer candle count instead of a fixed width, so
+            // raising the candle count widens the wavelength toward the album art.
+            let visualizerWidth: CGFloat = useMusicVisualizer ? CGFloat(Defaults[.visualizerBarCount]) * 4 : 0
             // How far to pull the album art and waveform up alongside the notch.
             let notchHeight = vm.effectiveClosedNotchHeight
             let pullUp = max(notchHeight - 4, 20)

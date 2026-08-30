@@ -3362,9 +3362,9 @@ struct Media: View {
                 }
 
                 Picker("Visualizer candles", selection: $visualizerBarCount) {
-                    Text("4").tag(4)
-                    Text("5").tag(5)
-                    Text("6").tag(6)
+                    ForEach([4, 5, 6, 8, 10, 12, 16], id: \.self) { count in
+                        Text("\(count)").tag(count)
+                    }
                 }
                 
                 Picker("Color extraction", selection: $colorExtractionMode) {
