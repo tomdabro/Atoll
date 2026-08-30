@@ -135,6 +135,13 @@ Atoll builds upon the work of several open-source projects and draws inspiration
 
 [![Star History Chart](https://api.star-history.com/svg?repos=Ebullioscopic/Atoll&type=timeline&legend=top-left)](https://www.star-history.com/#Ebullioscopic/Atoll&type=timeline&legend=top-left)
 
+## Changes in This Fork
+All credit for Atoll itself belongs to [Ebullioscopic](https://github.com/Ebullioscopic)/kryoscopic (see Acknowledgments/Contributors above) — this fork's only change on top of upstream is a small integration point for
+[AtollPluginManager](https://github.com/tomdabro/AtollPluginManager), a separate, work-in-progress broker project of mine:
+
+- `ExtensionRPCServer.notifyShowBrokerWindow(bundleIdentifier:)` pushes an `atoll.showBrokerWindow` notification to a connected RPC client.
+- The AtollPluginManager row in **Settings → Extensions → App Permissions** gets an "Open Window" button that calls it, since that broker now runs as a background accessory app (no Dock icon) and needs a way back to its window.
+
 ## Updating Existing Clones
 If you previously cloned DynamicIsland, update the remote to track the Atoll repository:
 
