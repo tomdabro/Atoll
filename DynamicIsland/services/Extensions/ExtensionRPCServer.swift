@@ -234,6 +234,15 @@ final class ExtensionRPCServer {
         sendNotification(to: bundleIdentifier, method: "atoll.mediaCommand", params: params)
     }
 
+    /// Asks a connected client to bring its own window forward. Currently
+    /// only meaningful for AtollPluginManager: it runs `.accessory` (no
+    /// Dock icon) so it can sit in the background relaying plugins, and its
+    /// "App Permissions" row here is the only way back to its window — see
+    /// `ExtensionsSettingsView`.
+    func notifyShowBrokerWindow(bundleIdentifier: String) {
+        sendNotification(to: bundleIdentifier, method: "atoll.showBrokerWindow", params: [:])
+    }
+
     // MARK: - Shelf Event Subscriptions
 
     func registerShelfSubscription(for bundleIdentifier: String) {

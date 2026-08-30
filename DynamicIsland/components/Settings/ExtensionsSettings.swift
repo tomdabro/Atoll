@@ -20,6 +20,13 @@ import SwiftUI
 import Defaults
 import AtollExtensionKit
 
+/// AtollPluginManager is the sole documented RPC client that runs as a
+/// windowed background broker rather than a typical extension (see its
+/// README): it deliberately hides its Dock icon (`.accessory`) so it can
+/// sit in the background relaying plugins, which means its "App
+/// Permissions" row here is the only way back to its window.
+private let atollPluginManagerBundleIdentifier = "com.atollpluginmanager.broker"
+
 struct ExtensionsSettingsView: View {
     @ObservedObject private var authManager = ExtensionAuthorizationManager.shared
     @State private var searchText = ""
@@ -448,6 +455,15 @@ private struct ExtensionEntryRow: View {
                 .controlSize(.small)
             }
             
+            if entry.status == .authorized, entry.bundleIdentifier == atollPluginManagerBundleIdentifier {
+                Button {
+                    ExtensionRPCServer.shared.notifyShowBrokerWindow(bundleIdentifier: entry.bundleIdentifier)
+                } label: {
+                    Label("Open Window", systemImage: "macwindow")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
             Spacer()
             
             resetMenu
