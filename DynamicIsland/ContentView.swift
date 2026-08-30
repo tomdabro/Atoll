@@ -1654,7 +1654,7 @@ struct ContentView: View {
         if useMusicVisualizer || forceSpectrum {
             Rectangle()
                 .fill((Defaults[.coloredSpectrogram] ? Color(nsColor: musicManager.avgColor) : Color.gray).spectrogramGradient())
-                .frame(width: max(50, width), alignment: .center)
+                .frame(width: 50, alignment: .center)
                 .matchedGeometryEffect(id: "spectrum", in: albumArtNamespace)
                 .mask {
                     AudioVisualizerView(isPlaying: $musicManager.isPlaying)
