@@ -215,6 +215,15 @@ class AudioTap: NSObject {
     var isPaused: Bool = false
     private var displayMagnitudes: [Float] = Array(repeating: 0, count: 6)
 
+    // AGC (automatic gain control) for the per-band magnitudes: playback
+    // volume scales raw PCM amplitude, so with volume turned down every
+    // band's level sinks proportionally and the visualizer reads as dead
+    // even while music is playing. The rolling peak below tracks the
+    // loudest band with fast attack / slow decay and magnitudes are read
+    // out relative to it, so bars stay in the same visual range at any
+    // volume. Same approach as cliamp's ui.Visualizer AGC.
+    private var agcPeak: Float = 0
+
     // CoreAudio stuff
     private var tapID: AudioObjectID = kAudioObjectUnknown
     private var aggregateDeviceID: AudioObjectID = kAudioObjectUnknown
@@ -256,10 +265,29 @@ class AudioTap: NSObject {
 
     @objc private func updateSmoothedMagnitudes() {
         let nsMagnitudes = bridge.getSmoothedMagnitudes()
-        let targetLevels = nsMagnitudes.map { $0.floatValue }
-        
+        var targetLevels = nsMagnitudes.map { $0.floatValue }
+
+        // AGC: raw levels are 0...1 linear envelopes of volume-scaled RMS.
+        // Convert to dB, track the loudest band's peak with fast attack /
+        // slow decay, and re-map every band into the 45 dB range below that
+        // peak. Bands are ~0 when truly silent, so a small floor keeps the
+        // gate shut on near-silence instead of normalizing noise up into
+        // full-scale bars.
+        let epsilon: Float = 1e-6
+        let dbLevels = targetLevels.map { max(20 * log10(max($0, epsilon)), -60) }
+        let framePeak = dbLevels.max() ?? -60
+        if framePeak > agcPeak {
+            agcPeak = agcPeak * 0.7 + framePeak * 0.3
+        } else {
+            agcPeak = max(agcPeak - max(0.4, (agcPeak - framePeak) * 0.02), -60)
+        }
+        let floorDb = max(agcPeak - 45, -60)
+        targetLevels = dbLevels.map { db in
+            db <= floorDb ? 0 : min(1, (db - floorDb) / 45)
+        }
+
         let smoothingFactor: Float = 0.4
-        
+
         for i in 0..<min(targetLevels.count, displayMagnitudes.count) {
             let difference = targetLevels[i] - displayMagnitudes[i]
             displayMagnitudes[i] += difference * smoothingFactor
