@@ -228,8 +228,12 @@ class AudioTap: NSObject {
     // unless the value hit the native 1.0 clamp, which only makes the band
     // read slightly lower than reality), giving TRUE per-band RMS with real
     // dynamics, then AGC that -- instant attack, 5 dB/s decay (fast enough
-    // to follow a volume change in ~3 s, slow enough to keep chorus-vs-
-    // verse visible), 35 dB display window below the tracked peak.
+    // to follow a volume change in ~3-4 s, slow enough to keep chorus-vs-
+    // verse visible). 20 dB display window, not 35: the window is the
+    // peak-to-floor span mapped to full bar height, and real music's bands
+    // average 8-15 dB below their peak band -- a wide window renders that
+    // bulk near the top ("always high, looks very loud"), while 20 dB puts
+    // typical bands at 30-70% with only the peak band reaching full height.
     private var agcPeak: Float = -100
     /// The native layer's per-band fixed gains (AudioProcessor.kGains),
     /// mirrored here to divide back out and recover true band RMS.
@@ -283,8 +287,9 @@ class AudioTap: NSObject {
         }
 
         // AGC on true RMS: instant attack, 5 dB/s decay (this runs at 60 Hz,
-        // so 5/60 dB per frame), 35 dB display window. A volume-down step
-        // compensates in ~3 s; chorus-vs-verse dynamics remain visible.
+        // so 5/60 dB per frame), 20 dB display window. A volume-down step
+        // compensates in ~3-4 s; the narrow window keeps typical bands in
+        // the lower-middle of the bar height with only the peak band at max.
         let epsilon: Float = 1e-6
         let dbLevels = targetLevels.map { max(20 * log10(max($0, epsilon)), -85) }
         let framePeak = dbLevels.max() ?? -85
@@ -293,9 +298,9 @@ class AudioTap: NSObject {
         } else {
             agcPeak = max(agcPeak - 5.0 / 60.0, -85)
         }
-        let floorDb = max(agcPeak - 35, -85)
+        let floorDb = max(agcPeak - 20, -85)
         targetLevels = dbLevels.map { db in
-            db <= floorDb ? 0 : min(1, (db - floorDb) / 35)
+            db <= floorDb ? 0 : min(1, (db - floorDb) / 20)
         }
 
         let smoothingFactor: Float = 0.4
