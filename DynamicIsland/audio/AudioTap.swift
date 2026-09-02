@@ -218,11 +218,18 @@ class AudioTap: NSObject {
     // AGC (automatic gain control) for the per-band magnitudes: playback
     // volume scales raw PCM amplitude, so with volume turned down every
     // band's level sinks proportionally and the visualizer reads as dead
-    // even while music is playing. The rolling peak below tracks the
-    // loudest band with fast attack / slow decay and magnitudes are read
-    // out relative to it, so bars stay in the same visual range at any
-    // volume. Same approach as cliamp's ui.Visualizer AGC.
+    // even while music is playing. Normalizing each frame to its OWN peak
+    // is wrong though -- it pins the tallest bar to full scale every frame
+    // and destroys loud/quiet dynamics, making quiet passages render as
+    // max-loud. Instead this is a slow high-water mark: it rises instantly
+    // with genuinely loud material but decays only gradually (several
+    // seconds), so within-track dynamics stay visible while slow level
+    // shifts -- the volume knob -- are tracked and compensated.
     private var agcPeak: Float = 0
+    /// Wall time of the last frame that pushed agcPeak up; a loud moment
+    /// holds the high-water mark for a while after it passes instead of
+    /// letting decay start immediately on the next quieter frame.
+    private var agcLastAttackAt: Date?
 
     // CoreAudio stuff
     private var tapID: AudioObjectID = kAudioObjectUnknown
@@ -259,31 +266,35 @@ class AudioTap: NSObject {
         "cliamp",
     ]
 
-    private override init() {
-        super.init()
-    }
-
     @objc private func updateSmoothedMagnitudes() {
         let nsMagnitudes = bridge.getSmoothedMagnitudes()
         var targetLevels = nsMagnitudes.map { $0.floatValue }
 
-        // AGC: raw levels are 0...1 linear envelopes of volume-scaled RMS.
-        // Convert to dB, track the loudest band's peak with fast attack /
-        // slow decay, and re-map every band into the 45 dB range below that
-        // peak. Bands are ~0 when truly silent, so a small floor keeps the
-        // gate shut on near-silence instead of normalizing noise up into
-        // full-scale bars.
+        // AGC high-water mark: raw levels are 0...1 linear envelopes of
+        // volume-scaled RMS, converted to dB. agcPeak rises instantly on
+        // loud material (attack) but decays only ~1.5 dB/s, held for a
+        // 1.5 s grace period after the last attack so a single loud hit
+        // doesn't start decaying while its reverb tail is still ringing.
+        // Magnitudes are re-mapped into the 40 dB range below agcPeak, so
+        // quiet passages render below the top and loud passages reach it --
+        // dynamics stay visible, unlike normalizing to each frame's own
+        // peak, which rendered everything as constant max loudness. The
+        // volume knob changes the whole level slowly enough that agcPeak
+        // follows within a few seconds; -55 dB is an absolute floor so
+        // near-silence stays flat rather than amplifying noise up.
         let epsilon: Float = 1e-6
-        let dbLevels = targetLevels.map { max(20 * log10(max($0, epsilon)), -60) }
-        let framePeak = dbLevels.max() ?? -60
+        let dbLevels = targetLevels.map { max(20 * log10(max($0, epsilon)), -80) }
+        let framePeak = dbLevels.max() ?? -80
+        let now = Date()
         if framePeak > agcPeak {
-            agcPeak = agcPeak * 0.7 + framePeak * 0.3
-        } else {
-            agcPeak = max(agcPeak - max(0.4, (agcPeak - framePeak) * 0.02), -60)
+            agcPeak = framePeak
+            agcLastAttackAt = now
+        } else if let lastAttack = agcLastAttackAt, now.timeIntervalSince(lastAttack) > 1.5 {
+            agcPeak = max(agcPeak - 1.5 / 60.0, -55)
         }
-        let floorDb = max(agcPeak - 45, -60)
+        let floorDb = max(agcPeak - 40, -55)
         targetLevels = dbLevels.map { db in
-            db <= floorDb ? 0 : min(1, (db - floorDb) / 45)
+            db <= floorDb ? 0 : min(1, (db - floorDb) / 40)
         }
 
         let smoothingFactor: Float = 0.4
