@@ -215,21 +215,25 @@ class AudioTap: NSObject {
     var isPaused: Bool = false
     private var displayMagnitudes: [Float] = Array(repeating: 0, count: 6)
 
-    // AGC (automatic gain control) for the per-band magnitudes: playback
-    // volume scales raw PCM amplitude, so with volume turned down every
-    // band's level sinks proportionally and the visualizer reads as dead
-    // even while music is playing. Normalizing each frame to its OWN peak
-    // is wrong though -- it pins the tallest bar to full scale every frame
-    // and destroys loud/quiet dynamics, making quiet passages render as
-    // max-loud. Instead this is a slow high-water mark: it rises instantly
-    // with genuinely loud material but decays only gradually (several
-    // seconds), so within-track dynamics stay visible while slow level
-    // shifts -- the volume knob -- are tracked and compensated.
-    private var agcPeak: Float = 0
-    /// Wall time of the last frame that pushed agcPeak up; a loud moment
-    /// holds the high-water mark for a while after it passes instead of
-    /// letting decay start immediately on the next quieter frame.
-    private var agcLastAttackAt: Date?
+    // AGC (automatic gain control) for the per-band magnitudes. Two problems
+    // it has to solve at once:
+    //  1. Playback volume scales raw PCM amplitude, so with the volume knob
+    //     down every band sinks proportionally and the visualizer reads dead.
+    //  2. The native layer's fixed per-band kGains (3x..24x, AudioProcessor)
+    //     act as an EQ compressor: they push every band toward the 1.0 clamp
+    //     so all six render nearly identical, flattening both loud/quiet
+    //     dynamics and the spectral shape -- the "always max, looks very
+    //     loud" regression. The clamp also destroys above-peak information.
+    // So: undo the per-band gain here (divide it back out; exact inverse
+    // unless the value hit the native 1.0 clamp, which only makes the band
+    // read slightly lower than reality), giving TRUE per-band RMS with real
+    // dynamics, then AGC that -- instant attack, 5 dB/s decay (fast enough
+    // to follow a volume change in ~3 s, slow enough to keep chorus-vs-
+    // verse visible), 35 dB display window below the tracked peak.
+    private var agcPeak: Float = -100
+    /// The native layer's per-band fixed gains (AudioProcessor.kGains),
+    /// mirrored here to divide back out and recover true band RMS.
+    private static let nativeBandGains: [Float] = [3.0, 4.5, 6.0, 9.0, 14.0, 24.0]
 
     // CoreAudio stuff
     private var tapID: AudioObjectID = kAudioObjectUnknown
@@ -270,31 +274,28 @@ class AudioTap: NSObject {
         let nsMagnitudes = bridge.getSmoothedMagnitudes()
         var targetLevels = nsMagnitudes.map { $0.floatValue }
 
-        // AGC high-water mark: raw levels are 0...1 linear envelopes of
-        // volume-scaled RMS, converted to dB. agcPeak rises instantly on
-        // loud material (attack) but decays only ~1.5 dB/s, held for a
-        // 1.5 s grace period after the last attack so a single loud hit
-        // doesn't start decaying while its reverb tail is still ringing.
-        // Magnitudes are re-mapped into the 40 dB range below agcPeak, so
-        // quiet passages render below the top and loud passages reach it --
-        // dynamics stay visible, unlike normalizing to each frame's own
-        // peak, which rendered everything as constant max loudness. The
-        // volume knob changes the whole level slowly enough that agcPeak
-        // follows within a few seconds; -55 dB is an absolute floor so
-        // near-silence stays flat rather than amplifying noise up.
+        // Recover true per-band RMS by dividing the native layer's fixed
+        // band gain back out (see the state comment above for why). Values
+        // that hit the native 1.0 clamp lose a little accuracy but only
+        // render slightly lower than reality.
+        for i in 0..<min(targetLevels.count, Self.nativeBandGains.count) {
+            targetLevels[i] /= Self.nativeBandGains[i]
+        }
+
+        // AGC on true RMS: instant attack, 5 dB/s decay (this runs at 60 Hz,
+        // so 5/60 dB per frame), 35 dB display window. A volume-down step
+        // compensates in ~3 s; chorus-vs-verse dynamics remain visible.
         let epsilon: Float = 1e-6
-        let dbLevels = targetLevels.map { max(20 * log10(max($0, epsilon)), -80) }
-        let framePeak = dbLevels.max() ?? -80
-        let now = Date()
+        let dbLevels = targetLevels.map { max(20 * log10(max($0, epsilon)), -85) }
+        let framePeak = dbLevels.max() ?? -85
         if framePeak > agcPeak {
             agcPeak = framePeak
-            agcLastAttackAt = now
-        } else if let lastAttack = agcLastAttackAt, now.timeIntervalSince(lastAttack) > 1.5 {
-            agcPeak = max(agcPeak - 1.5 / 60.0, -55)
+        } else {
+            agcPeak = max(agcPeak - 5.0 / 60.0, -85)
         }
-        let floorDb = max(agcPeak - 40, -55)
+        let floorDb = max(agcPeak - 35, -85)
         targetLevels = dbLevels.map { db in
-            db <= floorDb ? 0 : min(1, (db - floorDb) / 40)
+            db <= floorDb ? 0 : min(1, (db - floorDb) / 35)
         }
 
         let smoothingFactor: Float = 0.4
